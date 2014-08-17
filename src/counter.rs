@@ -1,7 +1,6 @@
-//! Counter CRDTs and operations.
+//! Counter CRDTs.
 
 extern crate quickcheck;
-
 
 use std::cmp;
 use std::collections::TrieMap;
@@ -10,7 +9,6 @@ use std::iter::AdditiveIterator;
 use quickcheck::{Arbitrary, Gen, Shrinker};
 
 use Crdt;
-use CrdtOperation;
 use test::gen_replica_id;
 
 /// A grow-only counter.
@@ -34,6 +32,8 @@ impl GCounter {
     /// Create a new grow-only counter with the provided replica id and an
     /// initial count of 0.
     ///
+    /// Replica IDs **must** be unique among replicas of a counter.
+    ///
     /// ##### Example
     ///
     /// ```
@@ -55,7 +55,7 @@ impl GCounter {
     /// let counter = GCounter::new(42);
     /// assert_eq!(0, counter.count());
     /// ```
-    pub fn count(& self) -> u64 {
+    pub fn count(&self) -> u64 {
         self.counts.values().map(|&x| x).sum()
     }
 
@@ -94,6 +94,11 @@ impl GCounter {
         let operation = GCounterIncrement { replica_id: self.replica_id, amount: amount };
         self.apply(&operation);
         operation
+    }
+
+    /// Get the replica ID of this counter.
+    fn replica_id(&self) -> uint {
+        self.replica_id
     }
 }
 
@@ -152,10 +157,6 @@ impl Crdt<GCounterIncrement> for GCounter {
         };
         self.counts.insert(operation.replica_id, count);
     }
-
-    fn replica_id(&self) -> uint {
-        self.replica_id
-    }
 }
 
 impl PartialEq for GCounter {
@@ -210,7 +211,7 @@ impl Arbitrary for GCounter {
     }
 }
 
-impl CrdtOperation for GCounterIncrement {
+impl GCounterIncrement {
     fn replica_id(&self) -> uint {
         self.replica_id
     }
@@ -229,33 +230,35 @@ impl Arbitrary for GCounterIncrement {
 
 /// A incrementable and decrementable counter.
 #[deriving(Show, Clone)]
-pub struct PNCounter {
+pub struct PnCounter {
     replica_id: uint,
     counts: TrieMap<(u64, u64)>
 }
 
-/// An increment or decrement operation over `PNCounter` CRDTs.
+/// An increment or decrement operation over `PnCounter` CRDTs.
 #[deriving(Show, Clone)]
-pub struct PNCounterIncrement {
+pub struct PnCounterIncrement {
     replica_id: uint,
     amount: i64
 }
 
-impl PNCounter {
+impl PnCounter {
 
     /// Create a new counter with the provided replica id and an initial count
     /// of 0.
     ///
+    /// Replica IDs **must** be unique among replicas of a counter.
+    ///
     /// ##### Example
     ///
     /// ```
-    /// use crdt::counter::PNCounter;
+    /// use crdt::counter::PnCounter;
     ///
-    /// let mut counter = PNCounter::new(42);
+    /// let mut counter = PnCounter::new(42);
     /// assert_eq!(0, counter.count());
     /// ```
-    pub fn new(replica_id: uint) -> PNCounter {
-        PNCounter { replica_id: replica_id, counts: TrieMap::new() }
+    pub fn new(replica_id: uint) -> PnCounter {
+        PnCounter { replica_id: replica_id, counts: TrieMap::new() }
     }
 
     /// Get the current count of the counter.
@@ -263,11 +266,11 @@ impl PNCounter {
     /// ##### Example
     ///
     /// ```
-    /// # use crdt::counter::PNCounter;
-    /// let counter = PNCounter::new(42);
+    /// # use crdt::counter::PnCounter;
+    /// let counter = PnCounter::new(42);
     /// assert_eq!(0, counter.count());
     /// ```
-    pub fn count(& self) -> i64 {
+    pub fn count(&self) -> i64 {
         self.counts.values().map(|&(p, n)| p as i64 - n as i64).sum()
     }
 
@@ -277,8 +280,8 @@ impl PNCounter {
     /// ##### Example
     ///
     /// ```
-    /// # use crdt::counter::PNCounter;
-    /// let mut counter = PNCounter::new(42);
+    /// # use crdt::counter::PnCounter;
+    /// let mut counter = PnCounter::new(42);
     /// assert_eq!(0, counter.count());
     /// counter.increment(-13);
     /// assert_eq!(-13, counter.count());
@@ -294,10 +297,10 @@ impl PNCounter {
     ///
     /// ```
     /// # use std::i64;
-    /// # use crdt::counter::PNCounter;
+    /// # use crdt::counter::PnCounter;
     /// # use crdt::Crdt;
-    /// let mut replica1 = PNCounter::new(42);
-    /// let mut replica2 = PNCounter::new(43);
+    /// let mut replica1 = PnCounter::new(42);
+    /// let mut replica2 = PnCounter::new(43);
     ///
     /// replica1.increment(i64::MAX);   // OK
     /// replica2.increment(1);          // OK
@@ -307,14 +310,19 @@ impl PNCounter {
     /// replica1.increment(i64::MIN);   // OK
     /// replica1.increment(-1);         // replica1 is in an undefined state
     /// ```
-    pub fn increment(&mut self, amount: i64) -> PNCounterIncrement {
-        let operation = PNCounterIncrement { replica_id: self.replica_id, amount: amount };
+    pub fn increment(&mut self, amount: i64) -> PnCounterIncrement {
+        let operation = PnCounterIncrement { replica_id: self.replica_id, amount: amount };
         self.apply(&operation);
         operation
     }
+
+    /// Get the replica ID of this counter.
+    fn replica_id(&self) -> uint {
+        self.replica_id
+    }
 }
 
-impl Crdt<PNCounterIncrement> for PNCounter {
+impl Crdt<PnCounterIncrement> for PnCounter {
 
     /// Merge a replica into this counter.
     ///
@@ -323,11 +331,11 @@ impl Crdt<PNCounterIncrement> for PNCounter {
     /// ##### Example
     ///
     /// ```
-    /// # use crdt::counter::PNCounter;
+    /// # use crdt::counter::PnCounter;
     /// use crdt::Crdt;
     ///
-    /// let mut local = PNCounter::new(42);
-    /// let mut remote = PNCounter::new(43);
+    /// let mut local = PnCounter::new(42);
+    /// let mut remote = PnCounter::new(43);
     ///
     /// local.increment(-12);
     /// remote.increment(13);
@@ -335,7 +343,7 @@ impl Crdt<PNCounterIncrement> for PNCounter {
     /// local.merge(&remote);
     /// assert_eq!(1, local.count());
     /// ```
-    fn merge(&mut self, other: &PNCounter) {
+    fn merge(&mut self, other: &PnCounter) {
         for (replica_id, &(other_p, other_n)) in other.counts.iter() {
             let count = match self.counts.find(&replica_id) {
                 Some(&(self_p, self_n)) => (cmp::max(self_p, other_p), cmp::max(self_n, other_n)),
@@ -352,17 +360,17 @@ impl Crdt<PNCounterIncrement> for PNCounter {
     /// ##### Example
     ///
     /// ```
-    /// # use crdt::counter::PNCounter;
+    /// # use crdt::counter::PnCounter;
     /// # use crdt::Crdt;
-    /// let mut local = PNCounter::new(42);
-    /// let mut remote = PNCounter::new(43);
+    /// let mut local = PnCounter::new(42);
+    /// let mut remote = PnCounter::new(43);
     ///
     /// let op = remote.increment(-12);
     ///
     /// local.apply(&op);
     /// assert_eq!(-12, local.count());
     /// ```
-    fn apply(&mut self, operation: &PNCounterIncrement) {
+    fn apply(&mut self, operation: &PnCounterIncrement) {
         let (p_amount, n_amount) =
             if operation.amount > 0 {
                 (operation.amount as u64, 0)
@@ -377,27 +385,23 @@ impl Crdt<PNCounterIncrement> for PNCounter {
 
         self.counts.insert(operation.replica_id, count);
     }
-
-    fn replica_id(&self) -> uint {
-        self.replica_id
-    }
 }
 
-impl PartialEq for PNCounter {
-    fn eq(&self, other: &PNCounter) -> bool {
+impl PartialEq for PnCounter {
+    fn eq(&self, other: &PnCounter) -> bool {
         self.counts == other.counts
     }
 }
 
-impl Eq for PNCounter {}
+impl Eq for PnCounter {}
 
-impl PartialOrd for PNCounter {
-    fn partial_cmp(&self, other: &PNCounter) -> Option<Ordering> {
+impl PartialOrd for PnCounter {
+    fn partial_cmp(&self, other: &PnCounter) -> Option<Ordering> {
 
         /// Compares `a` to `b` based on replica counts.
         ///
         /// Precondition: `a.counts.len() <= b.counts.len()`
-        fn a_gt_b(a: &PNCounter, b: &PNCounter) -> bool {
+        fn a_gt_b(a: &PnCounter, b: &PnCounter) -> bool {
             for (replica_id, &(a_p_count, a_n_count)) in a.counts.iter() {
                 match b.counts.find(&replica_id) {
                     Some(&(b_p_count, b_n_count))
@@ -425,34 +429,34 @@ impl PartialOrd for PNCounter {
     }
 }
 
-impl Arbitrary for PNCounter {
+impl Arbitrary for PnCounter {
 
-    fn arbitrary<G: Gen>(g: &mut G) -> PNCounter {
-        PNCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
+    fn arbitrary<G: Gen>(g: &mut G) -> PnCounter {
+        PnCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
     }
 
-    fn shrink(&self) -> Box<Shrinker<PNCounter>> {
+    fn shrink(&self) -> Box<Shrinker<PnCounter>> {
         let replica_id = self.replica_id();
 
-        box self.counts.shrink().map(|counts| PNCounter { replica_id: replica_id, counts: counts })
-            as Box<Shrinker<PNCounter>>
+        box self.counts.shrink().map(|counts| PnCounter { replica_id: replica_id, counts: counts })
+            as Box<Shrinker<PnCounter>>
     }
 }
 
-impl CrdtOperation for PNCounterIncrement {
+impl PnCounterIncrement {
     fn replica_id(&self) -> uint {
         self.replica_id
     }
 }
 
-impl Arbitrary for PNCounterIncrement {
-    fn arbitrary<G: Gen>(g: &mut G) -> PNCounterIncrement {
-        PNCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
+impl Arbitrary for PnCounterIncrement {
+    fn arbitrary<G: Gen>(g: &mut G) -> PnCounterIncrement {
+        PnCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<PNCounterIncrement>> {
+    fn shrink(&self) -> Box<Shrinker<PnCounterIncrement>> {
         let replica_id = self.replica_id();
-        box self.amount.shrink().map(|amount| PNCounterIncrement { replica_id: replica_id, amount: amount })
-            as Box<Shrinker<PNCounterIncrement>>
+        box self.amount.shrink().map(|amount| PnCounterIncrement { replica_id: replica_id, amount: amount })
+            as Box<Shrinker<PnCounterIncrement>>
     }
 }
 
@@ -465,7 +469,7 @@ mod test {
     use std::iter::AdditiveIterator;
 
     use Crdt;
-    use counter::{GCounter, GCounterIncrement, PNCounter, PNCounterIncrement};
+    use counter::{GCounter, GCounterIncrement, PnCounter, PnCounterIncrement};
 
     #[quickcheck]
     fn gcounter_local_increment(increments: Vec<u32>) -> bool {
@@ -550,7 +554,7 @@ mod test {
 
     #[quickcheck]
     fn pncounter_local_increment(increments: Vec<i32>) -> bool {
-        let mut counter = PNCounter::new(0);
+        let mut counter = PnCounter::new(0);
         for &amount in increments.iter() {
             counter.increment(amount as i64);
         }
@@ -558,11 +562,11 @@ mod test {
     }
 
     #[quickcheck]
-    fn pncounter_apply_is_commutative(increments: Vec<PNCounterIncrement>) -> bool {
+    fn pncounter_apply_is_commutative(increments: Vec<PnCounterIncrement>) -> bool {
         // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<PNCounterIncrement> = increments.move_iter().take(5).collect();
+        let truncated: Vec<PnCounterIncrement> = increments.move_iter().take(5).collect();
 
-        let mut reference = PNCounter::new(0);
+        let mut reference = PnCounter::new(0);
         for increment in truncated.iter() {
             reference.apply(increment);
         }
@@ -570,7 +574,7 @@ mod test {
         truncated.as_slice()
                  .permutations()
                  .map(|permutation| {
-                     permutation.iter().fold(PNCounter::new(0), |mut counter, op| {
+                     permutation.iter().fold(PnCounter::new(0), |mut counter, op| {
                          counter.apply(op);
                          counter
                      })
@@ -579,11 +583,11 @@ mod test {
     }
 
     #[quickcheck]
-    fn pncounter_merge_is_commutative(counters: Vec<PNCounter>) -> bool {
+    fn pncounter_merge_is_commutative(counters: Vec<PnCounter>) -> bool {
         // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<PNCounter> = counters.move_iter().take(5).collect();
+        let truncated: Vec<PnCounter> = counters.move_iter().take(5).collect();
 
-        let mut reference = PNCounter::new(0);
+        let mut reference = PnCounter::new(0);
         for counter in truncated.iter() {
             reference.merge(counter);
         }
@@ -591,7 +595,7 @@ mod test {
         truncated.as_slice()
                  .permutations()
                  .map(|permutation| {
-                     permutation.iter().fold(PNCounter::new(0), |mut counter, other| {
+                     permutation.iter().fold(PnCounter::new(0), |mut counter, other| {
                          counter.merge(other);
                          counter
                      })
@@ -600,20 +604,20 @@ mod test {
     }
 
     #[quickcheck]
-    fn pncounter_ordering_lte(mut a: PNCounter, b: PNCounter) -> bool {
+    fn pncounter_ordering_lte(mut a: PnCounter, b: PnCounter) -> bool {
         a.merge(&b);
         a >= b && b <= a
     }
 
     #[quickcheck]
-    fn pncounter_ordering_lt(mut a: PNCounter, b: PNCounter) -> bool {
+    fn pncounter_ordering_lt(mut a: PnCounter, b: PnCounter) -> bool {
         a.merge(&b);
         a.increment(-1);
         a > b && b < a
     }
 
     #[quickcheck]
-    fn pncounter_ordering_equality(mut a: PNCounter, mut b: PNCounter) -> bool {
+    fn pncounter_ordering_equality(mut a: PnCounter, mut b: PnCounter) -> bool {
         a.merge(&b);
         b.merge(&a);
         a == b
@@ -623,7 +627,7 @@ mod test {
     }
 
     #[quickcheck]
-    fn pncounter_ordering_none(mut a: PNCounter, mut b: PNCounter) -> bool {
+    fn pncounter_ordering_none(mut a: PnCounter, mut b: PnCounter) -> bool {
         a.increment(1);
         b.increment(-1);
         a.partial_cmp(&b) == None && b.partial_cmp(&a) == None

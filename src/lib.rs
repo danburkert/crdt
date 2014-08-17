@@ -16,6 +16,7 @@ extern crate quickcheck;
 extern crate log;
 
 pub mod counter;
+pub mod register;
 pub mod test;
 
 /// A Conflict-free Replicated Data Type.
@@ -31,20 +32,24 @@ pub mod test;
 /// the entire state of the mutated CRDT is merged into remote replicas in order
 /// to restore consistency. With operation-based replication, only the mutating
 /// operation is applied to remote replicas in order to restore consistency.
-/// Accordingly, operation-based replication is relatively lighter weight, but
-/// has the requirement that all operations must be reliably broadcast and
-/// applied to remote replicas. State-based replication schemes can maintain
-/// (eventual) consistency merely by guaranteeing that state based replication
-/// will (eventually) happen.
+/// Operation-based replication is lighter weight in terms of the amount of
+/// data which must be transmitted to replicas per mutation, but has the
+/// requirement that all operations must be reliably broadcast and applied to
+/// remote replicas. State-based replication schemes can maintain (eventual)
+/// consistency merely by guaranteeing that state based replication will
+/// (eventually) happen. Shapiro, et al. have shown that state-based CRDTs are
+/// equivalent to operation-based CRDTs. The CRDTs exposed by this library
+/// allow for either state-based or operation-based replication, or a mix of
+/// both.
 ///
 /// ###### Replica ID
 ///
-/// All CRDT replicas are required to have a `uint` identifier, or replica ID.
-/// The replica ID **must** be unique among replicas, so it should be taken from
+/// Many CRDTs require a `uint` identifier, or replica ID, upon creation. The
+/// replica ID **must** be unique among replicas, so it should be taken from
 /// unique per-replica configuration, or from a source of strong coordination
 /// such as [ZooKeeper](http://zookeeper.apache.org/) or
-/// [etcd](https://github.com/coreos/etcd) (implementing a Rust client for
-/// these services is left as an exercise for the reader).
+/// [etcd](https://github.com/coreos/etcd) (implementing a Rust client for these
+/// services is left as an exercise for the reader).
 ///
 /// ###### Transaction IDs
 ///
@@ -73,7 +78,7 @@ pub mod test;
 ///
 /// 1. [A comprehensive study of Convergent and Commutative Replicated Data Types](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) (Shapiro, et al.)
 /// 2. [An Optimized Conflict-free Replicated Set](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
-pub trait Crdt<Operation : CrdtOperation> : PartialOrd {
+pub trait Crdt<Operation> : PartialOrd {
 
     /// Merge a replica into this CRDT.
     ///
@@ -84,16 +89,4 @@ pub trait Crdt<Operation : CrdtOperation> : PartialOrd {
     ///
     /// This method is used to perform operation-based replication.
     fn apply(&mut self, operation: &Operation);
-
-    /// Get the replica ID of this CRDT.
-    ///
-    /// Replica IDs **must** be unique among replicas of a CRDT.
-    fn replica_id(&self) -> uint;
-}
-
-/// An operation on a CRDT.
-pub trait CrdtOperation {
-
-    /// Get the replica ID of the origin CRDT.
-    fn replica_id(&self) -> uint;
 }
