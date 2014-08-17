@@ -1,4 +1,22 @@
+//! A library of Conflict-free Replicated Data Types.
+//!
+//! Conflict-free replicated data types (also called convergent and commutative
+//! replicated data types) allow for concurrent updates to distributed replicas
+//! with strong eventual consistency and without coordination.
+//!
+//! ###### Further Reading
+//!
+//! 1. [A comprehensive study of Convergent and Commutative Replicated Data Types](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) (Shapiro, et al.)
+//! 2. [An Optimized Conflict-free Replicated Set](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
+
+#![feature(phase)]
+extern crate quickcheck;
+
+#[phase(plugin, link)]
+extern crate log;
+
 pub mod counter;
+pub mod test;
 
 /// A Conflict-free Replicated Data Type.
 ///
@@ -55,7 +73,7 @@ pub mod counter;
 ///
 /// 1. [A comprehensive study of Convergent and Commutative Replicated Data Types](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) (Shapiro, et al.)
 /// 2. [An Optimized Conflict-free Replicated Set](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
-pub trait Crdt<Operation> : PartialOrd {
+pub trait Crdt<Operation : CrdtOperation> : PartialOrd {
 
     /// Merge a replica into this CRDT.
     ///
@@ -70,5 +88,12 @@ pub trait Crdt<Operation> : PartialOrd {
     /// Get the replica ID of this CRDT.
     ///
     /// Replica IDs **must** be unique among replicas of a CRDT.
+    fn replica_id(&self) -> uint;
+}
+
+/// An operation on a CRDT.
+pub trait CrdtOperation {
+
+    /// Get the replica ID of the origin CRDT.
     fn replica_id(&self) -> uint;
 }
