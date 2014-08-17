@@ -17,6 +17,7 @@ extern crate log;
 
 pub mod counter;
 pub mod register;
+pub mod set;
 pub mod test;
 
 /// A Conflict-free Replicated Data Type.
