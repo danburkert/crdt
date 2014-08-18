@@ -84,15 +84,15 @@ impl GCounter {
     /// let mut replica1 = GCounter::new(42);
     /// let mut replica2 = GCounter::new(43);
     ///
-    /// replica1.increment(u64::MAX);   // OK
-    /// replica2.increment(1);          // OK
+    /// replica1.increment(u64::MAX);     // OK
+    /// replica2.increment(1);            // OK
     ///
-    /// replica1.merge(&replica2);      // replica1 is in an undefined state
-    /// replica2.merge(&replica1);      // replica2 is in an undefined state
+    /// replica1.merge(replica2.clone()); // replica1 is in an undefined state
+    /// replica2.merge(replica1.clone()); // replica2 is in an undefined state
     /// ```
     pub fn increment(&mut self, amount: u64) -> GCounterIncrement {
         let operation = GCounterIncrement { replica_id: self.replica_id, amount: amount };
-        self.apply(&operation);
+        self.apply(operation);
         operation
     }
 
@@ -120,10 +120,10 @@ impl Crdt<GCounterIncrement> for GCounter {
     /// local.increment(12);
     /// remote.increment(13);
     ///
-    /// local.merge(&remote);
+    /// local.merge(remote);
     /// assert_eq!(25, local.count());
     /// ```
-    fn merge(&mut self, other: &GCounter) {
+    fn merge(&mut self, other: GCounter) {
         for (replica_id, other_count) in other.counts.iter() {
             let count = match self.counts.find_mut(&replica_id) {
                 Some(self_count) => cmp::max(*self_count, *other_count),
@@ -147,10 +147,10 @@ impl Crdt<GCounterIncrement> for GCounter {
     ///
     /// let op = remote.increment(13);
     ///
-    /// local.apply(&op);
+    /// local.apply(op);
     /// assert_eq!(13, local.count());
     /// ```
-    fn apply(&mut self, operation: &GCounterIncrement) {
+    fn apply(&mut self, operation: GCounterIncrement) {
         let count = match self.counts.find_mut(&operation.replica_id) {
             Some(self_count) => *self_count + operation.amount,
             None => operation.amount
@@ -302,17 +302,17 @@ impl PnCounter {
     /// let mut replica1 = PnCounter::new(42);
     /// let mut replica2 = PnCounter::new(43);
     ///
-    /// replica1.increment(i64::MAX);   // OK
-    /// replica2.increment(1);          // OK
+    /// replica1.increment(i64::MAX);       // OK
+    /// replica2.increment(1);              // OK
     ///
-    /// replica2.merge(&replica1);      // replica2 is in an undefined state
+    /// replica2.merge(replica1.clone());   // replica2 is in an undefined state
     ///
-    /// replica1.increment(i64::MIN);   // OK
-    /// replica1.increment(-1);         // replica1 is in an undefined state
+    /// replica1.increment(i64::MIN);       // OK
+    /// replica1.increment(-1);             // replica1 is in an undefined state
     /// ```
     pub fn increment(&mut self, amount: i64) -> PnCounterIncrement {
         let operation = PnCounterIncrement { replica_id: self.replica_id, amount: amount };
-        self.apply(&operation);
+        self.apply(operation);
         operation
     }
 
@@ -340,10 +340,10 @@ impl Crdt<PnCounterIncrement> for PnCounter {
     /// local.increment(-12);
     /// remote.increment(13);
     ///
-    /// local.merge(&remote);
+    /// local.merge(remote);
     /// assert_eq!(1, local.count());
     /// ```
-    fn merge(&mut self, other: &PnCounter) {
+    fn merge(&mut self, other: PnCounter) {
         for (replica_id, &(other_p, other_n)) in other.counts.iter() {
             let count = match self.counts.find(&replica_id) {
                 Some(&(self_p, self_n)) => (cmp::max(self_p, other_p), cmp::max(self_n, other_n)),
@@ -367,10 +367,10 @@ impl Crdt<PnCounterIncrement> for PnCounter {
     ///
     /// let op = remote.increment(-12);
     ///
-    /// local.apply(&op);
+    /// local.apply(op);
     /// assert_eq!(-12, local.count());
     /// ```
-    fn apply(&mut self, operation: &PnCounterIncrement) {
+    fn apply(&mut self, operation: PnCounterIncrement) {
         let (p_amount, n_amount) =
             if operation.amount > 0 {
                 (operation.amount as u64, 0)
@@ -486,14 +486,14 @@ mod test {
         let truncated: Vec<GCounterIncrement> = increments.move_iter().take(5).collect();
 
         let mut reference = GCounter::new(0);
-        for increment in truncated.iter() {
+        for increment in truncated.clone().move_iter() {
             reference.apply(increment);
         }
 
         truncated.as_slice()
                  .permutations()
                  .map(|permutation| {
-                     permutation.iter().fold(GCounter::new(0), |mut counter, op| {
+                     permutation.iter().fold(GCounter::new(0), |mut counter, &op| {
                          counter.apply(op);
                          counter
                      })
@@ -507,7 +507,7 @@ mod test {
         let truncated: Vec<GCounter> = counters.move_iter().take(5).collect();
 
         let mut reference = GCounter::new(0);
-        for counter in truncated.iter() {
+        for counter in truncated.clone().move_iter() {
             reference.merge(counter);
         }
 
@@ -515,7 +515,7 @@ mod test {
                  .permutations()
                  .map(|permutation| {
                      permutation.iter().fold(GCounter::new(0), |mut counter, other| {
-                         counter.merge(other);
+                         counter.merge(other.clone());
                          counter
                      })
                  })
@@ -524,21 +524,21 @@ mod test {
 
     #[quickcheck]
     fn gcounter_ordering_lte(mut a: GCounter, b: GCounter) -> bool {
-        a.merge(&b);
+        a.merge(b.clone());
         a >= b && b <= a
     }
 
     #[quickcheck]
     fn gcounter_ordering_lt(mut a: GCounter, b: GCounter) -> bool {
-        a.merge(&b);
+        a.merge(b.clone());
         a.increment(1);
         a > b && b < a
     }
 
     #[quickcheck]
     fn gcounter_ordering_equality(mut a: GCounter, mut b: GCounter) -> bool {
-        a.merge(&b);
-        b.merge(&a);
+        a.merge(b.clone());
+        b.merge(a.clone());
         a == b
             && b == a
             && a.partial_cmp(&b) == Some(Equal)
@@ -567,14 +567,14 @@ mod test {
         let truncated: Vec<PnCounterIncrement> = increments.move_iter().take(5).collect();
 
         let mut reference = PnCounter::new(0);
-        for increment in truncated.iter() {
+        for increment in truncated.clone().move_iter() {
             reference.apply(increment);
         }
 
         truncated.as_slice()
                  .permutations()
                  .map(|permutation| {
-                     permutation.iter().fold(PnCounter::new(0), |mut counter, op| {
+                     permutation.iter().fold(PnCounter::new(0), |mut counter, &op| {
                          counter.apply(op);
                          counter
                      })
@@ -588,7 +588,7 @@ mod test {
         let truncated: Vec<PnCounter> = counters.move_iter().take(5).collect();
 
         let mut reference = PnCounter::new(0);
-        for counter in truncated.iter() {
+        for counter in truncated.clone().move_iter() {
             reference.merge(counter);
         }
 
@@ -596,7 +596,7 @@ mod test {
                  .permutations()
                  .map(|permutation| {
                      permutation.iter().fold(PnCounter::new(0), |mut counter, other| {
-                         counter.merge(other);
+                         counter.merge(other.clone());
                          counter
                      })
                  })
@@ -605,21 +605,21 @@ mod test {
 
     #[quickcheck]
     fn pncounter_ordering_lte(mut a: PnCounter, b: PnCounter) -> bool {
-        a.merge(&b);
+        a.merge(b.clone());
         a >= b && b <= a
     }
 
     #[quickcheck]
     fn pncounter_ordering_lt(mut a: PnCounter, b: PnCounter) -> bool {
-        a.merge(&b);
+        a.merge(b.clone());
         a.increment(-1);
         a > b && b < a
     }
 
     #[quickcheck]
     fn pncounter_ordering_equality(mut a: PnCounter, mut b: PnCounter) -> bool {
-        a.merge(&b);
-        b.merge(&a);
+        a.merge(b.clone());
+        b.merge(a.clone());
         a == b
             && b == a
             && a.partial_cmp(&b) == Some(Equal)

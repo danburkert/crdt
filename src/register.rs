@@ -103,10 +103,10 @@ impl <T : Clone> Crdt<LwwRegister<T>> for LwwRegister<T> {
     /// let mut local = LwwRegister::new("local", 1);
     /// let mut remote = LwwRegister::new("remote", 2);
     ///
-    /// local.merge(&remote);
+    /// local.merge(remote);
     /// assert_eq!("remote", *local.get());
     /// ```
-    fn merge(&mut self, other: &LwwRegister<T>) {
+    fn merge(&mut self, other: LwwRegister<T>) {
         if self.transaction_id <= other.transaction_id {
             self.value = other.value.clone();
             self.transaction_id = other.transaction_id;
@@ -127,10 +127,10 @@ impl <T : Clone> Crdt<LwwRegister<T>> for LwwRegister<T> {
     ///
     /// let op = remote.set("remote-2", 2).expect("Register set failed!");
     ///
-    /// local.apply(&op);
+    /// local.apply(op);
     /// assert_eq!("remote-2", *local.get());
     /// ```
-    fn apply(&mut self, other: &LwwRegister<T>) {
+    fn apply(&mut self, other: LwwRegister<T>) {
         self.merge(other);
     }
 }
@@ -192,7 +192,7 @@ mod test {
         let truncated: Vec<LwwRegister<String>> = mutations.move_iter().take(6).collect();
 
         let mut reference = LwwRegister::new("".to_string(), 0);
-        for increment in truncated.iter() {
+        for increment in truncated.clone().move_iter() {
             reference.apply(increment);
         }
 
@@ -200,7 +200,7 @@ mod test {
                  .permutations()
                  .map(|permutation| {
                      permutation.iter().fold(LwwRegister::new("".to_string(), 0), |mut counter, op| {
-                         counter.apply(op);
+                         counter.apply(op.clone());
                          counter
                      })
                  })
@@ -213,7 +213,7 @@ mod test {
         let truncated: Vec<LwwRegister<String>> = counters.move_iter().take(5).collect();
 
         let mut reference = LwwRegister::new("".to_string(), 0);
-        for counter in truncated.iter() {
+        for counter in truncated.clone().move_iter() {
             reference.merge(counter);
         }
 
@@ -221,7 +221,7 @@ mod test {
                  .permutations()
                  .map(|permutation| {
                      permutation.iter().fold(LwwRegister::new("".to_string(), 0), |mut counter, other| {
-                         counter.merge(other);
+                         counter.merge(other.clone());
                          counter
                      })
                  })
@@ -230,13 +230,13 @@ mod test {
 
     #[quickcheck]
     fn lwwregister_ordering_lte(mut a: LwwRegister<String>, b: LwwRegister<String>) -> bool {
-        a.merge(&b);
+        a.merge(b.clone());
         a >= b && b <= a
     }
 
     #[quickcheck]
     fn lwwregister_ordering_lt(mut a: LwwRegister<String>, b: LwwRegister<String>) -> bool {
-        a.merge(&b);
+        a.merge(b.clone());
         let current_tid = a.transaction_id();
         a.set("foo".to_string(), current_tid + 1);
         a > b && b < a
@@ -244,8 +244,8 @@ mod test {
 
     #[quickcheck]
     fn lwwregister_ordering_equality(mut a: LwwRegister<String>, mut b: LwwRegister<String>) -> bool {
-        a.merge(&b);
-        b.merge(&a);
+        a.merge(b.clone());
+        b.merge(a.clone());
         a == b
             && b == a
             && a.partial_cmp(&b) == Some(Equal)
