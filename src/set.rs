@@ -48,6 +48,7 @@
 //! `OrSet` should be used in most cases where typical set semantics are
 //! needed.
 
+extern crate debug;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Show, Formatter, FormatError};
 use std::hash::Hash;
@@ -394,22 +395,12 @@ impl <T : Eq + Hash> PartialEq for TpSet<T> {
 impl <T : Eq + Hash> Eq for TpSet<T> {}
 
 impl <T : Eq + Hash> PartialOrd for TpSet<T> {
-
-    // TODO: This isn't right because it doesn't take into account the phases.
-    // A TpSet > another TpSet if it's seen all the same events: so it must have
-    // all the same elements in the remove set, and all of the same elements in the add set
-    // either in its add set or its remove set.
-
-
     fn partial_cmp(&self, other: &TpSet<T>) -> Option<Ordering> {
-
         if self.elements == other.elements {
             return Some(Equal);
         }
-
         let mut self_is_greater = true;
         let mut other_is_greater = true;
-
         for (element, &is_present) in other.elements.iter() {
             if is_present {
                 if !self.elements.contains_key(element) {
@@ -426,7 +417,6 @@ impl <T : Eq + Hash> PartialOrd for TpSet<T> {
                 }
             }
         }
-
         for (element, &is_present) in self.elements.iter() {
             if is_present {
                 if !other.elements.contains_key(element) {
@@ -443,7 +433,6 @@ impl <T : Eq + Hash> PartialOrd for TpSet<T> {
                 }
             }
         }
-
         if self_is_greater && other_is_greater {
             None
         } else if self_is_greater {
@@ -518,19 +507,290 @@ impl <T : Arbitrary> Arbitrary for TpSetOperation<T> {
     }
 }
 
+/// A last-writer wins set.
+pub struct LwwSet<T> {
+    elements: HashMap<T, (bool, u64)>
+}
+
+/// An insert or remove operation over `LwwSet` CRDTs.
+#[deriving(Clone, Show, PartialEq, Eq, Hash)]
+pub enum LwwSetOperation<T> {
+    LwwSetInsert(T, u64),
+    LwwSetRemove(T, u64)
+}
+
+impl <T : Hash + Eq + Clone> LwwSet<T> {
+
+    /// Create a new last-writer wins set.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use crdt::set::LwwSet;
+    ///
+    /// let mut set = LwwSet::<int>::new();
+    /// assert!(set.is_empty());
+    /// ```
+    pub fn new() -> LwwSet<T> {
+        LwwSet { elements: HashMap::new() }
+    }
+
+    /// Insert an element into a two-phase set.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use crdt::set::LwwSet;
+    ///
+    /// let mut set = LwwSet::new();
+    /// set.insert("first-element", 0);
+    /// assert!(set.contains(&"first-element"));
+    /// ```
+    pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOperation<T>> {
+        let &(_, latest_tid) = self.elements.insert_or_update_with(element.clone(), (true, transaction_id),
+            |_, entry| {
+                if transaction_id >= entry.val1() {
+                    *entry = (true, transaction_id)
+                }
+            });
+        if transaction_id == latest_tid {
+            Some(LwwSetInsert(element, transaction_id))
+        } else {
+            None
+        }
+    }
+
+    /// Remove an element from a two-phase set.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use crdt::set::LwwSet;
+    ///
+    /// let mut set = LwwSet::new();
+    /// set.insert("first-element", 0);
+    /// assert!(set.contains(&"first-element"));
+    /// set.remove("first-element", 1);
+    /// assert!(!set.contains(&"first-element"));
+    /// ```
+    pub fn remove(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOperation<T>> {
+        let &(_, latest_tid) = self.elements.insert_or_update_with(element.clone(), (false, transaction_id),
+            |_, entry| {
+                if transaction_id > entry.val1() {
+                    *entry = (false, transaction_id);
+                }
+            });
+        if transaction_id == latest_tid {
+            Some(LwwSetRemove(element, transaction_id))
+        } else {
+            None
+        }
+    }
+}
+
+impl <T : Hash + Eq + Clone + Show> Crdt<LwwSetOperation<T>> for LwwSet<T> {
+
+    /// Merge a replica into the set.
+    ///
+    /// This method is used to perform state-based replication.
+    ///
+    /// ##### Example
+    ///
+    /// ```
+    /// # use crdt::set::LwwSet;
+    /// use crdt::Crdt;
+    ///
+    /// let mut local = LwwSet::new();
+    /// let mut remote = LwwSet::new();
+    ///
+    /// local.insert(1i, 0);
+    /// remote.insert(1, 1);
+    /// remote.insert(2, 2);
+    /// remote.remove(1, 3);
+    ///
+    /// local.merge(remote);
+    /// assert!(local.contains(&2));
+    /// assert!(!local.contains(&1));
+    /// assert_eq!(1, local.len());
+    /// ```
+    fn merge(&mut self, other: LwwSet<T>) {
+        for (element, (is_present, tid)) in other.elements.move_iter() {
+            if is_present {
+                self.insert(element, tid);
+            } else {
+                self.remove(element, tid);
+            }
+        }
+    }
+
+    /// Apply an insert operation to the set.
+    ///
+    /// This method is used to perform operation-based replication.
+    ///
+    /// ##### Example
+    ///
+    /// ```
+    /// # use crdt::set::LwwSet;
+    /// # use crdt::Crdt;
+    /// let mut local = LwwSet::new();
+    /// let mut remote = LwwSet::new();
+    ///
+    /// let op = remote.insert(13i, 0).expect("LwwSet should be empty.");
+    ///
+    /// local.apply(op);
+    /// assert!(local.contains(&13));
+    /// ```
+    fn apply(&mut self, operation: LwwSetOperation<T>) {
+        match operation {
+            LwwSetInsert(element, tid) => { self.insert(element, tid); },
+            LwwSetRemove(element, tid) => { self.remove(element, tid); }
+        }
+    }
+}
+
+impl <T : Hash + Eq> Collection for LwwSet<T> {
+    fn len(&self) -> uint {
+        self.elements.iter().filter(|&(_, &(is_present, _))| is_present).count()
+    }
+}
+
+impl <T : Hash + Eq> Set<T> for LwwSet<T> {
+    fn contains(&self, value: &T) -> bool {
+        self.elements.find(value).map(|&(is_present, _)| is_present).unwrap_or(false)
+    }
+    fn is_subset(&self, other: &LwwSet<T>) -> bool {
+        self.elements
+            .iter()
+            .all(|(element, &(is_present, _))| !is_present || other.contains(element))
+    }
+    fn is_disjoint(&self, other: &LwwSet<T>) -> bool {
+        self.elements
+            .iter()
+            .all(|(element, &(is_present, _))| !is_present || !other.contains(element))
+    }
+}
+
+impl <T : Eq + Hash> PartialEq for LwwSet<T> {
+    fn eq(&self, other: &LwwSet<T>) -> bool {
+        self.elements == other.elements
+    }
+}
+
+impl <T : Eq + Hash> Eq for LwwSet<T> {}
+
+impl <T : Eq + Hash + Show> PartialOrd for LwwSet<T> {
+    fn partial_cmp(&self, other: &LwwSet<T>) -> Option<Ordering> {
+        if self.elements == other.elements {
+            return Some(Equal);
+        }
+        let self_is_greater =
+            self.elements
+                .iter()
+                .any(|(element, &(_, self_tid))| {
+                    other.elements.find(element).map_or(true, |&(_, other_tid)| {
+                        self_tid > other_tid
+                    })
+                });
+
+        let other_is_greater =
+            other.elements
+                .iter()
+                .any(|(element, &(_, other_tid))| {
+                        self.elements.find(element).map_or(true, |&(_, self_tid)| {
+                        other_tid > self_tid
+                    })
+                });
+
+        if self_is_greater && other_is_greater {
+            None
+        } else if self_is_greater {
+            Some(Greater)
+        } else {
+            Some(Less)
+        }
+    }
+}
+
+impl <T : Eq + Hash + Show> Show for LwwSet<T> {
+     fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+         try!(write!(f, "{{present: {{"));
+         for (i, x) in self.elements
+                           .iter()
+                           .filter(|&(_, &(is_present, _))| is_present)
+                           .map(|(e, &(_, tid))| (e, tid))
+                           .enumerate() {
+             if i != 0 { try!(write!(f, ", ")); }
+             try!(write!(f, "{}", x))
+         }
+         try!(write!(f, "}}, removed: {{"));
+         for (i, x) in self.elements
+                           .iter()
+                           .filter(|&(_, &(is_present, _))| !is_present)
+                           .map(|(e, &(_, tid))| (e, tid))
+                           .enumerate() {
+             if i != 0 { try!(write!(f, ", ")); }
+             try!(write!(f, "{}", x))
+         }
+         write!(f, "}}}}")
+     }
+}
+
+impl <T : Clone> Clone for LwwSet<T> {
+    fn clone(&self) -> LwwSet<T> {
+        LwwSet { elements: self.elements.clone() }
+    }
+}
+
+impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for LwwSet<T> {
+    fn arbitrary<G: Gen>(g: &mut G) -> LwwSet<T> {
+        let elements: Vec<(T, (bool, u64))> = Arbitrary::arbitrary(g);
+        LwwSet { elements: elements.move_iter().collect() }
+    }
+    fn shrink(&self) -> Box<Shrinker<LwwSet<T>>> {
+        let elements: Vec<(T, (bool, u64))> = self.elements.clone().move_iter().collect();
+        let sets: Vec<LwwSet<T>> = elements.shrink().map(|es| LwwSet { elements: es.move_iter().collect() }).collect();
+        box sets.move_iter() as Box<Shrinker<LwwSet<T>>>
+    }
+}
+
+impl <T : Arbitrary> Arbitrary for LwwSetOperation<T> {
+    fn arbitrary<G: Gen>(g: &mut G) -> LwwSetOperation<T> {
+        if Arbitrary::arbitrary(g) {
+            LwwSetInsert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+        } else {
+            LwwSetInsert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+        }
+    }
+    fn shrink(&self) -> Box<Shrinker<LwwSetOperation<T>>> {
+        match *self {
+            LwwSetInsert(ref element, tid) => {
+                let mut inserts: Vec<LwwSetOperation<T>> = element.shrink().map(|e| LwwSetInsert(e, tid)).collect();
+                inserts.extend(tid.shrink().map(|t| LwwSetInsert(element.clone(), t)));
+                box inserts.move_iter() as Box<Shrinker<LwwSetOperation<T>>>
+            }
+            LwwSetRemove(ref element, tid) => {
+                let mut removes: Vec<LwwSetOperation<T>> = element.shrink().map(|e| LwwSetRemove(e, tid)).collect();
+                removes.extend(tid.shrink().map(|t| LwwSetRemove(element.clone(), t)));
+                box removes.move_iter() as Box<Shrinker<LwwSetOperation<T>>>
+            }
+        }
+    }
+}
+
+
+
 #[cfg(test)]
 mod test {
 
     #[phase(plugin)]
     extern crate quickcheck_macros;
 
-    #[phase(plugin, link)] extern crate log;
-
     use Crdt;
-    use set::{GSet, GSetInsert, TpSet, TpSetOperation};
+    use set::{GSet, GSetInsert, TpSet, TpSetOperation, LwwSet, LwwSetOperation};
+    use std::u64;
 
     #[quickcheck]
-    fn gset_local_insert(elements: Vec<String>) -> bool {
+    fn gset_local_insert(elements: Vec<u8>) -> bool {
         let mut set = GSet::new();
         for element in elements.clone().move_iter() {
             set.insert(element);
@@ -540,9 +800,9 @@ mod test {
     }
 
     #[quickcheck]
-    fn gset_apply_is_commutative(inserts: Vec<GSetInsert<String>>) -> bool {
+    fn gset_apply_is_commutative(inserts: Vec<GSetInsert<u8>>) -> bool {
         // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<GSetInsert<String>> = inserts.move_iter().take(5).collect();
+        let truncated: Vec<GSetInsert<u8>> = inserts.move_iter().take(5).collect();
 
         let mut reference = GSet::new();
         for insert in truncated.clone().move_iter() {
@@ -561,9 +821,9 @@ mod test {
     }
 
     #[quickcheck]
-    fn gset_merge_is_commutative(counters: Vec<GSet<String>>) -> bool {
+    fn gset_merge_is_commutative(counters: Vec<GSet<u8>>) -> bool {
         // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<GSet<String>> = counters.move_iter().take(4).collect();
+        let truncated: Vec<GSet<u8>> = counters.move_iter().take(4).collect();
 
         let mut reference = GSet::new();
         for set in truncated.clone().move_iter() {
@@ -582,20 +842,26 @@ mod test {
     }
 
     #[quickcheck]
-    fn gset_ordering_lte(mut a: GSet<String>, b: GSet<String>) -> bool {
+    fn gset_ordering_lte(mut a: GSet<u8>, b: GSet<u8>) -> bool {
         a.merge(b.clone());
         a >= b && b <= a
     }
 
     #[quickcheck]
-    fn gset_ordering_lt(mut a: GSet<String>, b: GSet<String>) -> bool {
+    fn gset_ordering_lt(mut a: GSet<u8>, b: GSet<u8>) -> bool {
         a.merge(b.clone());
-        a.insert("foo".to_string());
+
+        let mut i = 0;
+        let mut success = None;
+        while success.is_none() {
+            success = a.insert(i);
+            i += 1;
+        }
         a > b && b < a
     }
 
     #[quickcheck]
-    fn gset_ordering_equality(mut a: GSet<String>, mut b: GSet<String>) -> bool {
+    fn gset_ordering_equality(mut a: GSet<u8>, mut b: GSet<u8>) -> bool {
         a.merge(b.clone());
         b.merge(a.clone());
         a == b
@@ -605,7 +871,7 @@ mod test {
     }
 
     #[quickcheck]
-    fn tpset_local_insert(elements: Vec<String>) -> bool {
+    fn tpset_local_insert(elements: Vec<u8>) -> bool {
         let mut set = TpSet::new();
         for element in elements.clone().move_iter() {
             set.insert(element);
@@ -615,9 +881,9 @@ mod test {
     }
 
     #[quickcheck]
-    fn tpset_apply_is_commutative(operations: Vec<TpSetOperation<String>>) -> bool {
+    fn tpset_apply_is_commutative(operations: Vec<TpSetOperation<u8>>) -> bool {
         // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<TpSetOperation<String>> = operations.move_iter().take(5).collect();
+        let truncated: Vec<TpSetOperation<u8>> = operations.move_iter().take(5).collect();
 
         let mut reference = TpSet::new();
         for operation in truncated.clone().move_iter() {
@@ -636,9 +902,9 @@ mod test {
     }
 
     #[quickcheck]
-    fn tpset_merge_is_commutative(counters: Vec<TpSet<String>>) -> bool {
+    fn tpset_merge_is_commutative(counters: Vec<TpSet<u8>>) -> bool {
         // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<TpSet<String>> = counters.move_iter().take(4).collect();
+        let truncated: Vec<TpSet<u8>> = counters.move_iter().take(4).collect();
 
         let mut reference = TpSet::new();
         for set in truncated.clone().move_iter() {
@@ -663,14 +929,94 @@ mod test {
     }
 
     #[quickcheck]
-    fn tpset_ordering_lt(mut a: TpSet<String>, b: TpSet<String>) -> bool {
+    fn tpset_ordering_lt(mut a: TpSet<u8>, b: TpSet<u8>) -> bool {
         a.merge(b.clone());
-        a.insert("foo".to_string());
+        let mut i = 0;
+        let mut success = None;
+        while success.is_none() {
+            success = a.insert(i);
+            i += 1;
+        }
         a > b && b < a
     }
 
     #[quickcheck]
-    fn tpset_ordering_equality(mut a: TpSet<String>, mut b: TpSet<String>) -> bool {
+    fn tpset_ordering_equality(mut a: TpSet<u8>, mut b: TpSet<u8>) -> bool {
+        a.merge(b.clone());
+        b.merge(a.clone());
+        a == b
+            && b == a
+            && a.partial_cmp(&b) == Some(Equal)
+            && b.partial_cmp(&a) == Some(Equal)
+    }
+
+    #[quickcheck]
+    fn lwwset_local_insert(elements: Vec<u8>) -> bool {
+        let mut set = LwwSet::new();
+        for element in elements.clone().move_iter() {
+            set.insert(element, 0);
+        }
+
+        elements.iter().all(|element| set.contains(element))
+    }
+
+    #[quickcheck]
+    fn lwwset_apply_is_commutative(operations: Vec<LwwSetOperation<u8>>) -> bool {
+        // This test takes too long with too many operations, so we truncate
+        let truncated: Vec<LwwSetOperation<u8>> = operations.move_iter().take(5).collect();
+
+        let mut reference = LwwSet::new();
+        for operation in truncated.clone().move_iter() {
+            reference.apply(operation);
+        }
+
+        truncated.as_slice()
+                 .permutations()
+                 .map(|permutation| {
+                     permutation.iter().fold(LwwSet::new(), |mut set, op| {
+                         set.apply(op.clone());
+                         set
+                     })
+                 })
+                 .all(|set| set == reference)
+    }
+
+    #[quickcheck]
+    fn lwwset_merge_is_commutative(counters: Vec<LwwSet<u8>>) -> bool {
+        // This test takes too long with too many counters, so we truncate
+        let truncated: Vec<LwwSet<u8>> = counters.move_iter().take(4).collect();
+
+        let mut reference = LwwSet::new();
+        for set in truncated.clone().move_iter() {
+            reference.merge(set);
+        }
+
+        truncated.as_slice()
+                 .permutations()
+                 .map(|permutation| {
+                     permutation.iter().fold(LwwSet::new(), |mut set, other| {
+                         set.merge(other.clone());
+                         set
+                     })
+                 })
+                 .all(|set| set == reference)
+    }
+
+    #[quickcheck]
+    fn lwwset_ordering_lte(mut a: LwwSet<u8>, b: LwwSet<u8>) -> bool {
+        a.merge(b.clone());
+        a >= b && b <= a
+    }
+
+    #[quickcheck]
+    fn lwwset_ordering_lt(mut a: LwwSet<u8>, b: LwwSet<u8>) -> bool {
+        a.merge(b.clone());
+        a.insert(0, u64::MAX);
+        a > b && b < a
+    }
+
+    #[quickcheck]
+    fn lwwset_ordering_equality(mut a: LwwSet<u8>, mut b: LwwSet<u8>) -> bool {
         a.merge(b.clone());
         b.merge(a.clone());
         a == b
