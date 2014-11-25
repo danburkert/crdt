@@ -49,7 +49,7 @@
 //! needed.
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Show, Formatter, FormatError};
+use std::fmt::{Show, Formatter, Error};
 use std::hash::Hash;
 
 use quickcheck::{Arbitrary, Gen, Shrinker};
@@ -102,6 +102,21 @@ impl <T : Hash + Eq + Clone> GSet<T> {
             None
         }
     }
+
+    /// Returns the number of elements in the set.
+    fn len(&self) -> uint {
+        self.elements.len()
+    }
+
+    fn contains(&self, value: &T) -> bool {
+        self.elements.contains(value)
+    }
+    fn is_subset(&self, other: &GSet<T>) -> bool {
+        self.elements.is_subset(&other.elements)
+    }
+    fn is_disjoint(&self, other: &GSet<T>) -> bool {
+        self.elements.is_disjoint(&other.elements)
+    }
 }
 
 impl <T : Hash + Eq + Clone> Crdt<GSetInsert<T>> for GSet<T> {
@@ -153,24 +168,6 @@ impl <T : Hash + Eq + Clone> Crdt<GSetInsert<T>> for GSet<T> {
     }
 }
 
-impl <T : Hash + Eq> Collection for GSet<T> {
-    fn len(&self) -> uint {
-        self.elements.len()
-    }
-}
-
-impl <T : Hash + Eq> Set<T> for GSet<T> {
-    fn contains(&self, value: &T) -> bool {
-        self.elements.contains(value)
-    }
-    fn is_subset(&self, other: &GSet<T>) -> bool {
-        self.elements.is_subset(&other.elements)
-    }
-    fn is_disjoint(&self, other: &GSet<T>) -> bool {
-        self.elements.is_disjoint(&other.elements)
-    }
-}
-
 impl <T : Eq + Hash> PartialEq for GSet<T> {
     fn eq(&self, other: &GSet<T>) -> bool {
         self.elements == other.elements
@@ -194,7 +191,7 @@ impl <T : Eq + Hash> PartialOrd for GSet<T> {
 }
 
 impl <T : Eq + Hash + Show> Show for GSet<T> {
-     fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          self.elements.fmt(f)
      }
 }
@@ -240,9 +237,9 @@ pub struct TpSet<T> {
 
 /// An insert or remove operation over `TpSet` CRDTs.
 #[deriving(Clone, Show, PartialEq, Eq, Hash)]
-pub enum TpSetOperation<T> {
-    TpSetInsert(T),
-    TpSetRemove(T)
+pub enum TpSetOp<T> {
+    Insert(T),
+    Remove(T),
 }
 
 impl <T : Hash + Eq + Clone> TpSet<T> {
@@ -272,12 +269,12 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
     /// set.insert("first-element");
     /// assert!(set.contains(&"first-element"));
     /// ```
-    pub fn insert(&mut self, element: T) -> Option<TpSetOperation<T>> {
+    pub fn insert(&mut self, element: T) -> Option<TpSetOp<T>> {
         if self.elements.contains_key(&element) {
             None
         } else {
             self.elements.insert(element.clone(), true);
-            Some(TpSetInsert(element))
+            Some(TpSetOp::Insert(element))
         }
     }
 
@@ -294,16 +291,37 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
     /// set.remove("first-element");
     /// assert!(!set.contains(&"first-element"));
     /// ```
-    pub fn remove(&mut self, element: T) -> Option<TpSetOperation<T>> {
+    pub fn remove(&mut self, element: T) -> Option<TpSetOp<T>> {
         if self.elements.insert(element.clone(), false) {
-            Some(TpSetRemove(element))
+            Some(TpSetOp::Remove(element))
         } else {
             None
         }
     }
+
+    /// Returns the number of elements in the set.
+    fn len(&self) -> uint {
+        self.elements.iter().filter(|&(_, &is_present)| is_present).count()
+    }
+
+    fn contains(&self, value: &T) -> bool {
+        *self.elements.find(value).unwrap_or(&false)
+    }
+    fn is_subset(&self, other: &TpSet<T>) -> bool {
+        for (element, &is_present) in self.elements.iter() {
+            if is_present && !other.contains(element) { return false; }
+        }
+        true
+    }
+    fn is_disjoint(&self, other: &TpSet<T>) -> bool {
+        for (element, &is_present) in self.elements.iter() {
+            if is_present && other.contains(element) { return false; }
+        }
+        true
+    }
 }
 
-impl <T : Hash + Eq + Clone> Crdt<TpSetOperation<T>> for TpSet<T> {
+impl <T : Hash + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
 
     /// Merge a replica into the set.
     ///
@@ -354,35 +372,11 @@ impl <T : Hash + Eq + Clone> Crdt<TpSetOperation<T>> for TpSet<T> {
     /// local.apply(op);
     /// assert!(local.contains(&13));
     /// ```
-    fn apply(&mut self, operation: TpSetOperation<T>) {
+    fn apply(&mut self, operation: TpSetOp<T>) {
         match operation {
-            TpSetInsert(element) => { self.insert(element); },
-            TpSetRemove(element) => { self.remove(element); }
+            TpSetOp::Insert(element) => { self.insert(element); },
+            TpSetOp::Remove(element) => { self.remove(element); }
         }
-    }
-}
-
-impl <T : Hash + Eq> Collection for TpSet<T> {
-    fn len(&self) -> uint {
-        self.elements.iter().filter(|&(_, &is_present)| is_present).count()
-    }
-}
-
-impl <T : Hash + Eq> Set<T> for TpSet<T> {
-    fn contains(&self, value: &T) -> bool {
-        *self.elements.find(value).unwrap_or(&false)
-    }
-    fn is_subset(&self, other: &TpSet<T>) -> bool {
-        for (element, &is_present) in self.elements.iter() {
-            if is_present && !other.contains(element) { return false; }
-        }
-        true
-    }
-    fn is_disjoint(&self, other: &TpSet<T>) -> bool {
-        for (element, &is_present) in self.elements.iter() {
-            if is_present && other.contains(element) { return false; }
-        }
-        true
     }
 }
 
@@ -444,7 +438,7 @@ impl <T : Eq + Hash> PartialOrd for TpSet<T> {
 }
 
 impl <T : Eq + Hash + Show> Show for TpSet<T> {
-     fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          try!(write!(f, "{{present: {{"));
          for (i, x) in self.elements
                            .iter()
@@ -485,23 +479,23 @@ impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for TpSet<T> {
     }
 }
 
-impl <T : Arbitrary> Arbitrary for TpSetOperation<T> {
-    fn arbitrary<G: Gen>(g: &mut G) -> TpSetOperation<T> {
+impl <T : Arbitrary> Arbitrary for TpSetOp<T> {
+    fn arbitrary<G: Gen>(g: &mut G) -> TpSetOp<T> {
         if Arbitrary::arbitrary(g) {
-            TpSetInsert(Arbitrary::arbitrary(g))
+            TpSetOp::Insert(Arbitrary::arbitrary(g))
         } else {
-            TpSetInsert(Arbitrary::arbitrary(g))
+            TpSetOp::Insert(Arbitrary::arbitrary(g))
         }
     }
-    fn shrink(&self) -> Box<Shrinker<TpSetOperation<T>>> {
+    fn shrink(&self) -> Box<Shrinker<TpSetOp<T>>> {
         match *self {
-            TpSetInsert(ref element) => {
-                let inserts: Vec<TpSetOperation<T>> = element.shrink().map(|e| TpSetInsert(e)).collect();
-                box inserts.move_iter() as Box<Shrinker<TpSetOperation<T>>>
+            TpSetOp::Insert(ref element) => {
+                let inserts: Vec<TpSetOp<T>> = element.shrink().map(|e| TpSetOp::Insert(e)).collect();
+                box inserts.move_iter() as Box<Shrinker<TpSetOp<T>>>
             }
-            TpSetRemove(ref element) => {
-                let removes: Vec<TpSetOperation<T>> = element.shrink().map(|e| TpSetRemove(e)).collect();
-                box removes.move_iter() as Box<Shrinker<TpSetOperation<T>>>
+            TpSetOp::Remove(ref element) => {
+                let removes: Vec<TpSetOp<T>> = element.shrink().map(|e| TpSetOp::Remove(e)).collect();
+                box removes.move_iter() as Box<Shrinker<TpSetOp<T>>>
             }
         }
     }
@@ -514,9 +508,9 @@ pub struct LwwSet<T> {
 
 /// An insert or remove operation over `LwwSet` CRDTs.
 #[deriving(Clone, Show, PartialEq, Eq, Hash)]
-pub enum LwwSetOperation<T> {
-    LwwSetInsert(T, u64),
-    LwwSetRemove(T, u64)
+pub enum LwwSetOp<T> {
+    Insert(T, u64),
+    Remove(T, u64),
 }
 
 impl <T : Hash + Eq + Clone> LwwSet<T> {
@@ -546,7 +540,7 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     /// set.insert("first-element", 0);
     /// assert!(set.contains(&"first-element"));
     /// ```
-    pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOperation<T>> {
+    pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOp<T>> {
         let &(_, latest_tid) = self.elements.insert_or_update_with(element.clone(), (true, transaction_id),
             |_, entry| {
                 if transaction_id >= entry.val1() {
@@ -554,7 +548,7 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
                 }
             });
         if transaction_id == latest_tid {
-            Some(LwwSetInsert(element, transaction_id))
+            Some(LwwSetOp::Insert(element, transaction_id))
         } else {
             None
         }
@@ -573,7 +567,7 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     /// set.remove("first-element", 1);
     /// assert!(!set.contains(&"first-element"));
     /// ```
-    pub fn remove(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOperation<T>> {
+    pub fn remove(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOp<T>> {
         let &(_, latest_tid) = self.elements.insert_or_update_with(element.clone(), (false, transaction_id),
             |_, entry| {
                 if transaction_id > entry.val1() {
@@ -581,14 +575,33 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
                 }
             });
         if transaction_id == latest_tid {
-            Some(LwwSetRemove(element, transaction_id))
+            Some(LwwSetOp::Remove(element, transaction_id))
         } else {
             None
         }
     }
+
+    /// Returns the number of elements in the set.
+    fn len(&self) -> uint {
+        self.elements.iter().filter(|&(_, &(is_present, _))| is_present).count()
+    }
+
+    fn contains(&self, value: &T) -> bool {
+        self.elements.find(value).map(|&(is_present, _)| is_present).unwrap_or(false)
+    }
+    fn is_subset(&self, other: &LwwSet<T>) -> bool {
+        self.elements
+            .iter()
+            .all(|(element, &(is_present, _))| !is_present || other.contains(element))
+    }
+    fn is_disjoint(&self, other: &LwwSet<T>) -> bool {
+        self.elements
+            .iter()
+            .all(|(element, &(is_present, _))| !is_present || !other.contains(element))
+    }
 }
 
-impl <T : Hash + Eq + Clone + Show> Crdt<LwwSetOperation<T>> for LwwSet<T> {
+impl <T : Hash + Eq + Clone + Show> Crdt<LwwSetOp<T>> for LwwSet<T> {
 
     /// Merge a replica into the set.
     ///
@@ -640,33 +653,11 @@ impl <T : Hash + Eq + Clone + Show> Crdt<LwwSetOperation<T>> for LwwSet<T> {
     /// local.apply(op);
     /// assert!(local.contains(&13));
     /// ```
-    fn apply(&mut self, operation: LwwSetOperation<T>) {
+    fn apply(&mut self, operation: LwwSetOp<T>) {
         match operation {
-            LwwSetInsert(element, tid) => { self.insert(element, tid); },
-            LwwSetRemove(element, tid) => { self.remove(element, tid); }
+            LwwSetOp::Insert(element, tid) => { self.insert(element, tid); },
+            LwwSetOp::Remove(element, tid) => { self.remove(element, tid); }
         }
-    }
-}
-
-impl <T : Hash + Eq> Collection for LwwSet<T> {
-    fn len(&self) -> uint {
-        self.elements.iter().filter(|&(_, &(is_present, _))| is_present).count()
-    }
-}
-
-impl <T : Hash + Eq> Set<T> for LwwSet<T> {
-    fn contains(&self, value: &T) -> bool {
-        self.elements.find(value).map(|&(is_present, _)| is_present).unwrap_or(false)
-    }
-    fn is_subset(&self, other: &LwwSet<T>) -> bool {
-        self.elements
-            .iter()
-            .all(|(element, &(is_present, _))| !is_present || other.contains(element))
-    }
-    fn is_disjoint(&self, other: &LwwSet<T>) -> bool {
-        self.elements
-            .iter()
-            .all(|(element, &(is_present, _))| !is_present || !other.contains(element))
     }
 }
 
@@ -712,7 +703,7 @@ impl <T : Eq + Hash + Show> PartialOrd for LwwSet<T> {
 }
 
 impl <T : Eq + Hash + Show> Show for LwwSet<T> {
-     fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          try!(write!(f, "{{present: {{"));
          for (i, x) in self.elements
                            .iter()
@@ -753,25 +744,25 @@ impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for LwwSet<T> {
     }
 }
 
-impl <T : Arbitrary> Arbitrary for LwwSetOperation<T> {
-    fn arbitrary<G: Gen>(g: &mut G) -> LwwSetOperation<T> {
+impl <T : Arbitrary> Arbitrary for LwwSetOp<T> {
+    fn arbitrary<G: Gen>(g: &mut G) -> LwwSetOp<T> {
         if Arbitrary::arbitrary(g) {
-            LwwSetInsert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+            LwwSetOp::Insert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
         } else {
-            LwwSetInsert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+            LwwSetOp::Insert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
         }
     }
-    fn shrink(&self) -> Box<Shrinker<LwwSetOperation<T>>> {
+    fn shrink(&self) -> Box<Shrinker<LwwSetOp<T>>> {
         match *self {
-            LwwSetInsert(ref element, tid) => {
-                let mut inserts: Vec<LwwSetOperation<T>> = element.shrink().map(|e| LwwSetInsert(e, tid)).collect();
-                inserts.extend(tid.shrink().map(|t| LwwSetInsert(element.clone(), t)));
-                box inserts.move_iter() as Box<Shrinker<LwwSetOperation<T>>>
+            LwwSetOp::Insert(ref element, tid) => {
+                let mut inserts: Vec<LwwSetOp<T>> = element.shrink().map(|e| LwwSetOp::Insert(e, tid)).collect();
+                inserts.extend(tid.shrink().map(|t| LwwSetOp::Insert(element.clone(), t)));
+                box inserts.move_iter() as Box<Shrinker<LwwSetOp<T>>>
             }
-            LwwSetRemove(ref element, tid) => {
-                let mut removes: Vec<LwwSetOperation<T>> = element.shrink().map(|e| LwwSetRemove(e, tid)).collect();
-                removes.extend(tid.shrink().map(|t| LwwSetRemove(element.clone(), t)));
-                box removes.move_iter() as Box<Shrinker<LwwSetOperation<T>>>
+            LwwSetOp::Remove(ref element, tid) => {
+                let mut removes: Vec<LwwSetOp<T>> = element.shrink().map(|e| LwwSetOp::Remove(e, tid)).collect();
+                removes.extend(tid.shrink().map(|t| LwwSetOp::Remove(element.clone(), t)));
+                box removes.move_iter() as Box<Shrinker<LwwSetOp<T>>>
             }
         }
     }
@@ -785,9 +776,9 @@ pub struct PnSet<T> {
 
 /// An insert or remove operation over `PnSet` CRDTs.
 #[deriving(Clone, Show, PartialEq, Eq, Hash)]
-pub enum PnSetOperation<T> {
-    PnSetInsert(T),
-    PnSetRemove(T)
+pub enum PnSetOp<T> {
+    Insert(T),
+    Remove(T),
 }
 
 impl <T : Hash + Eq + Clone> PnSet<T> {
@@ -817,7 +808,7 @@ impl <T : Hash + Eq + Clone> PnSet<T> {
     /// set.insert("first-element");
     /// assert!(set.contains(&"first-element"));
     /// ```
-    pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<PnSetOperation<T>> {
+    pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<PnSetOp<T>> {
         let &(_, latest_tid) =
             self.elements.insert_or_update_with(
                 element.clone(),
@@ -828,7 +819,7 @@ impl <T : Hash + Eq + Clone> PnSet<T> {
                     }
                 });
         if transaction_id == latest_tid {
-            Some(PnSetInsert(element, transaction_id))
+            Some(PnSetOp::Insert(element, transaction_id))
         } else {
             None
         }
@@ -847,7 +838,7 @@ impl <T : Hash + Eq + Clone> PnSet<T> {
     /// set.remove("first-element", 1);
     /// assert!(!set.contains(&"first-element"));
     /// ```
-    pub fn remove(&mut self, element: T, transaction_id: u64) -> Option<PnSetOperation<T>> {
+    pub fn remove(&mut self, element: T, transaction_id: u64) -> Option<PnSetOp<T>> {
         let &(_, latest_tid) = self.elements.insert_or_update_with(element.clone(), (false, transaction_id),
             |_, entry| {
                 if transaction_id > entry.val1() {
@@ -855,14 +846,33 @@ impl <T : Hash + Eq + Clone> PnSet<T> {
                 }
             });
         if transaction_id == latest_tid {
-            Some(PnSetRemove(element, transaction_id))
+            Some(PnSetOp::Remove(element, transaction_id))
         } else {
             None
         }
     }
+
+    /// Returns the number of elements in the set.
+    fn len(&self) -> uint {
+        self.elements.iter().filter(|&(_, &(is_present, _))| is_present).count()
+    }
+
+    fn contains(&self, value: &T) -> bool {
+        self.elements.find(value).map(|&(is_present, _)| is_present).unwrap_or(false)
+    }
+    fn is_subset(&self, other: &PnSet<T>) -> bool {
+        self.elements
+            .iter()
+            .all(|(element, &(is_present, _))| !is_present || other.contains(element))
+    }
+    fn is_disjoint(&self, other: &PnSet<T>) -> bool {
+        self.elements
+            .iter()
+            .all(|(element, &(is_present, _))| !is_present || !other.contains(element))
+    }
 }
 
-impl <T : Hash + Eq + Clone + Show> Crdt<PnSetOperation<T>> for PnSet<T> {
+impl <T : Hash + Eq + Clone + Show> Crdt<PnSetOp<T>> for PnSet<T> {
 
     /// Merge a replica into the set.
     ///
@@ -914,33 +924,11 @@ impl <T : Hash + Eq + Clone + Show> Crdt<PnSetOperation<T>> for PnSet<T> {
     /// local.apply(op);
     /// assert!(local.contains(&13));
     /// ```
-    fn apply(&mut self, operation: PnSetOperation<T>) {
+    fn apply(&mut self, operation: PnSetOp<T>) {
         match operation {
-            PnSetInsert(element, tid) => { self.insert(element, tid); },
-            PnSetRemove(element, tid) => { self.remove(element, tid); }
+            PnSetOp::Insert(element, tid) => { self.insert(element, tid); },
+            PnSetOp::Remove(element, tid) => { self.remove(element, tid); }
         }
-    }
-}
-
-impl <T : Hash + Eq> Collection for PnSet<T> {
-    fn len(&self) -> uint {
-        self.elements.iter().filter(|&(_, &(is_present, _))| is_present).count()
-    }
-}
-
-impl <T : Hash + Eq> Set<T> for PnSet<T> {
-    fn contains(&self, value: &T) -> bool {
-        self.elements.find(value).map(|&(is_present, _)| is_present).unwrap_or(false)
-    }
-    fn is_subset(&self, other: &PnSet<T>) -> bool {
-        self.elements
-            .iter()
-            .all(|(element, &(is_present, _))| !is_present || other.contains(element))
-    }
-    fn is_disjoint(&self, other: &PnSet<T>) -> bool {
-        self.elements
-            .iter()
-            .all(|(element, &(is_present, _))| !is_present || !other.contains(element))
     }
 }
 
@@ -986,7 +974,7 @@ impl <T : Eq + Hash + Show> PartialOrd for PnSet<T> {
 }
 
 impl <T : Eq + Hash + Show> Show for PnSet<T> {
-     fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          try!(write!(f, "{{present: {{"));
          for (i, x) in self.elements
                            .iter()
@@ -1027,25 +1015,25 @@ impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for PnSet<T> {
     }
 }
 
-impl <T : Arbitrary> Arbitrary for PnSetOperation<T> {
-    fn arbitrary<G: Gen>(g: &mut G) -> PnSetOperation<T> {
+impl <T : Arbitrary> Arbitrary for PnSetOp<T> {
+    fn arbitrary<G: Gen>(g: &mut G) -> PnSetOp<T> {
         if Arbitrary::arbitrary(g) {
-            PnSetInsert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+            PnSetOp::Insert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
         } else {
-            PnSetInsert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+            PnSetOp::Insert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
         }
     }
-    fn shrink(&self) -> Box<Shrinker<PnSetOperation<T>>> {
+    fn shrink(&self) -> Box<Shrinker<PnSetOp<T>>> {
         match *self {
-            PnSetInsert(ref element, tid) => {
-                let mut inserts: Vec<PnSetOperation<T>> = element.shrink().map(|e| PnSetInsert(e, tid)).collect();
-                inserts.extend(tid.shrink().map(|t| PnSetInsert(element.clone(), t)));
-                box inserts.move_iter() as Box<Shrinker<PnSetOperation<T>>>
+            PnSetOp::Insert(ref element, tid) => {
+                let mut inserts: Vec<PnSetOp<T>> = element.shrink().map(|e| PnSetOp::Insert(e, tid)).collect();
+                inserts.extend(tid.shrink().map(|t| PnSetOp::Insert(element.clone(), t)));
+                box inserts.move_iter() as Box<Shrinker<PnSetOp<T>>>
             }
-            PnSetRemove(ref element, tid) => {
-                let mut removes: Vec<PnSetOperation<T>> = element.shrink().map(|e| PnSetRemove(e, tid)).collect();
-                removes.extend(tid.shrink().map(|t| PnSetRemove(element.clone(), t)));
-                box removes.move_iter() as Box<Shrinker<PnSetOperation<T>>>
+            PnSetOp::Remove(ref element, tid) => {
+                let mut removes: Vec<PnSetOp<T>> = element.shrink().map(|e| PnSetOp::Remove(e, tid)).collect();
+                removes.extend(tid.shrink().map(|t| PnSetOp::Remove(element.clone(), t)));
+                box removes.move_iter() as Box<Shrinker<PnSetOp<T>>>
             }
         }
     }
@@ -1064,7 +1052,7 @@ mod test {
     use quickcheck::{Arbitrary, Gen, Shrinker};
 
     use Crdt;
-    use set::{GSet, GSetInsert, TpSet, TpSetOperation, LwwSet, LwwSetOperation};
+    use set::{GSet, GSetInsert, TpSet, TpSetOp, LwwSet, LwwSetOp};
     use std::u64;
 
     #[quickcheck]
@@ -1159,9 +1147,9 @@ mod test {
     }
 
     #[quickcheck]
-    fn tpset_apply_is_commutative(operations: Vec<TpSetOperation<u8>>) -> bool {
+    fn tpset_apply_is_commutative(operations: Vec<TpSetOp<u8>>) -> bool {
         // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<TpSetOperation<u8>> = operations.move_iter().take(5).collect();
+        let truncated: Vec<TpSetOp<u8>> = operations.move_iter().take(5).collect();
 
         let mut reference = TpSet::new();
         for operation in truncated.clone().move_iter() {
@@ -1239,9 +1227,9 @@ mod test {
     }
 
     #[quickcheck]
-    fn lwwset_apply_is_commutative(operations: Vec<LwwSetOperation<u8>>) -> bool {
+    fn lwwset_apply_is_commutative(operations: Vec<LwwSetOp<u8>>) -> bool {
         // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<LwwSetOperation<u8>> = operations.move_iter().take(5).collect();
+        let truncated: Vec<LwwSetOp<u8>> = operations.move_iter().take(5).collect();
 
         let mut reference = LwwSet::new();
         for operation in truncated.clone().move_iter() {
