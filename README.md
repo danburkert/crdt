@@ -1,3 +1,17 @@
+[![Build Status](https://travis-ci.org/danburkert/crdt.svg?branch=master)](https://travis-ci.org/danburkert/crdt)
+
+[Documentation](http://rust-ci.org/danburkert/crdt/doc/crdt/)
+
+[Cargo](https://crates.io/crates/crdt)
+
+A library of CRDTs in Rust.
+
+## Status
+
+A work in progress.
+
 ## TODO
-1) A vector-clock CRDT
-2) A last n-versions register CRDT
+
+* All CRDTs should be serializable (capn-proto?)
+* Fill out the rest of the CRDT types
+* Exotic CRDTs such as bloom filter, sketches, vector clock, and last-n register
