@@ -4,11 +4,8 @@ name = "crdt"
 version = "0.0.1"
 authors = ["Dan Burkert <dan@danburkert.com>"]
 
-
 [dependencies.quickcheck]
-# Waiting on PR #19
-# git = "https://github.com/BurntSushi/quickcheck.git"
-path = "../quickcheck"
+quickcheck = "*"
 
 [dev-dependencies.quickcheck_macros]
-git = "https://github.com/BurntSushi/quickcheck.git"
+quickcheck_macros = "*"

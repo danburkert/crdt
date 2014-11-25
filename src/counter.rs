@@ -1,15 +1,13 @@
 //! Counter CRDTs.
 
-extern crate quickcheck;
-
 use std::cmp;
 use std::collections::TrieMap;
 use std::iter::AdditiveIterator;
 
-use quickcheck::{Arbitrary, Gen, Shrinker};
-
 use Crdt;
 use test::gen_replica_id;
+
+use quickcheck::{Arbitrary, Gen, Shrinker};
 
 /// A grow-only counter.
 ///
@@ -465,6 +463,9 @@ mod test {
 
     #[phase(plugin)]
     extern crate quickcheck_macros;
+
+    use quickcheck::{Arbitrary, Gen, Shrinker};
+
 
     use std::iter::AdditiveIterator;
 

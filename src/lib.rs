@@ -10,6 +10,7 @@
 //! 2. [An Optimized Conflict-free Replicated Set](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
 
 #![feature(phase)]
+
 extern crate quickcheck;
 
 #[phase(plugin, link)]

@@ -1,10 +1,8 @@
 //! Register CRDTs.
 
-extern crate quickcheck;
+use Crdt;
 
 use quickcheck::{Arbitrary, Gen, Shrinker};
-
-use Crdt;
 
 /// A last-writer-wins register.
 ///
@@ -173,6 +171,10 @@ mod test {
 
     #[phase(plugin)]
     extern crate quickcheck_macros;
+
+    extern crate quickcheck;
+
+    use quickcheck::{Arbitrary, Gen, Shrinker};
 
     use Crdt;
     use register::LwwRegister;

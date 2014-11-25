@@ -48,7 +48,6 @@
 //! `OrSet` should be used in most cases where typical set semantics are
 //! needed.
 
-extern crate debug;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Show, Formatter, FormatError};
 use std::hash::Hash;
@@ -56,6 +55,7 @@ use std::hash::Hash;
 use quickcheck::{Arbitrary, Gen, Shrinker};
 
 use Crdt;
+use counter::PnCounter;
 
 /// A grow-only set.
 pub struct GSet<T> {
@@ -777,6 +777,281 @@ impl <T : Arbitrary> Arbitrary for LwwSetOperation<T> {
     }
 }
 
+/// A counting add/remove set.
+pub struct PnSet<T> {
+    replica_id: uint,
+    elements: HashMap<T, PnCounter>
+}
+
+/// An insert or remove operation over `PnSet` CRDTs.
+#[deriving(Clone, Show, PartialEq, Eq, Hash)]
+pub enum PnSetOperation<T> {
+    PnSetInsert(T),
+    PnSetRemove(T)
+}
+
+impl <T : Hash + Eq + Clone> PnSet<T> {
+
+    /// Create a new counting add/remove set with the provided replica id.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use crdt::set::PnSet;
+    ///
+    /// let mut set = PnSet::<int>::new(0);
+    /// assert!(set.is_empty());
+    /// ```
+    pub fn new(replica_id: uint) -> PnSet<T> {
+        PnSet { replica_id: replica_id, elements: HashMap::new() }
+    }
+
+    /// Insert an element into a two-phase set.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use crdt::set::PnSet;
+    ///
+    /// let mut set = PnSet::new(0);
+    /// set.insert("first-element");
+    /// assert!(set.contains(&"first-element"));
+    /// ```
+    pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<PnSetOperation<T>> {
+        let &(_, latest_tid) =
+            self.elements.insert_or_update_with(
+                element.clone(),
+                (true, transaction_id),
+                |_, entry| {
+                    if transaction_id >= entry.val1() {
+                        *entry = (true, transaction_id)
+                    }
+                });
+        if transaction_id == latest_tid {
+            Some(PnSetInsert(element, transaction_id))
+        } else {
+            None
+        }
+    }
+
+    /// Remove an element from a two-phase set.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use crdt::set::PnSet;
+    ///
+    /// let mut set = PnSet::new();
+    /// set.insert("first-element", 0);
+    /// assert!(set.contains(&"first-element"));
+    /// set.remove("first-element", 1);
+    /// assert!(!set.contains(&"first-element"));
+    /// ```
+    pub fn remove(&mut self, element: T, transaction_id: u64) -> Option<PnSetOperation<T>> {
+        let &(_, latest_tid) = self.elements.insert_or_update_with(element.clone(), (false, transaction_id),
+            |_, entry| {
+                if transaction_id > entry.val1() {
+                    *entry = (false, transaction_id);
+                }
+            });
+        if transaction_id == latest_tid {
+            Some(PnSetRemove(element, transaction_id))
+        } else {
+            None
+        }
+    }
+}
+
+impl <T : Hash + Eq + Clone + Show> Crdt<PnSetOperation<T>> for PnSet<T> {
+
+    /// Merge a replica into the set.
+    ///
+    /// This method is used to perform state-based replication.
+    ///
+    /// ##### Example
+    ///
+    /// ```
+    /// # use crdt::set::PnSet;
+    /// use crdt::Crdt;
+    ///
+    /// let mut local = PnSet::new();
+    /// let mut remote = PnSet::new();
+    ///
+    /// local.insert(1i, 0);
+    /// remote.insert(1, 1);
+    /// remote.insert(2, 2);
+    /// remote.remove(1, 3);
+    ///
+    /// local.merge(remote);
+    /// assert!(local.contains(&2));
+    /// assert!(!local.contains(&1));
+    /// assert_eq!(1, local.len());
+    /// ```
+    fn merge(&mut self, other: PnSet<T>) {
+        for (element, (is_present, tid)) in other.elements.move_iter() {
+            if is_present {
+                self.insert(element, tid);
+            } else {
+                self.remove(element, tid);
+            }
+        }
+    }
+
+    /// Apply an insert operation to the set.
+    ///
+    /// This method is used to perform operation-based replication.
+    ///
+    /// ##### Example
+    ///
+    /// ```
+    /// # use crdt::set::PnSet;
+    /// # use crdt::Crdt;
+    /// let mut local = PnSet::new();
+    /// let mut remote = PnSet::new();
+    ///
+    /// let op = remote.insert(13i, 0).expect("PnSet should be empty.");
+    ///
+    /// local.apply(op);
+    /// assert!(local.contains(&13));
+    /// ```
+    fn apply(&mut self, operation: PnSetOperation<T>) {
+        match operation {
+            PnSetInsert(element, tid) => { self.insert(element, tid); },
+            PnSetRemove(element, tid) => { self.remove(element, tid); }
+        }
+    }
+}
+
+impl <T : Hash + Eq> Collection for PnSet<T> {
+    fn len(&self) -> uint {
+        self.elements.iter().filter(|&(_, &(is_present, _))| is_present).count()
+    }
+}
+
+impl <T : Hash + Eq> Set<T> for PnSet<T> {
+    fn contains(&self, value: &T) -> bool {
+        self.elements.find(value).map(|&(is_present, _)| is_present).unwrap_or(false)
+    }
+    fn is_subset(&self, other: &PnSet<T>) -> bool {
+        self.elements
+            .iter()
+            .all(|(element, &(is_present, _))| !is_present || other.contains(element))
+    }
+    fn is_disjoint(&self, other: &PnSet<T>) -> bool {
+        self.elements
+            .iter()
+            .all(|(element, &(is_present, _))| !is_present || !other.contains(element))
+    }
+}
+
+impl <T : Eq + Hash> PartialEq for PnSet<T> {
+    fn eq(&self, other: &PnSet<T>) -> bool {
+        self.elements == other.elements
+    }
+}
+
+impl <T : Eq + Hash> Eq for PnSet<T> {}
+
+impl <T : Eq + Hash + Show> PartialOrd for PnSet<T> {
+    fn partial_cmp(&self, other: &PnSet<T>) -> Option<Ordering> {
+        if self.elements == other.elements {
+            return Some(Equal);
+        }
+        let self_is_greater =
+            self.elements
+                .iter()
+                .any(|(element, &(_, self_tid))| {
+                    other.elements.find(element).map_or(true, |&(_, other_tid)| {
+                        self_tid > other_tid
+                    })
+                });
+
+        let other_is_greater =
+            other.elements
+                .iter()
+                .any(|(element, &(_, other_tid))| {
+                        self.elements.find(element).map_or(true, |&(_, self_tid)| {
+                        other_tid > self_tid
+                    })
+                });
+
+        if self_is_greater && other_is_greater {
+            None
+        } else if self_is_greater {
+            Some(Greater)
+        } else {
+            Some(Less)
+        }
+    }
+}
+
+impl <T : Eq + Hash + Show> Show for PnSet<T> {
+     fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+         try!(write!(f, "{{present: {{"));
+         for (i, x) in self.elements
+                           .iter()
+                           .filter(|&(_, &(is_present, _))| is_present)
+                           .map(|(e, &(_, tid))| (e, tid))
+                           .enumerate() {
+             if i != 0 { try!(write!(f, ", ")); }
+             try!(write!(f, "{}", x))
+         }
+         try!(write!(f, "}}, removed: {{"));
+         for (i, x) in self.elements
+                           .iter()
+                           .filter(|&(_, &(is_present, _))| !is_present)
+                           .map(|(e, &(_, tid))| (e, tid))
+                           .enumerate() {
+             if i != 0 { try!(write!(f, ", ")); }
+             try!(write!(f, "{}", x))
+         }
+         write!(f, "}}}}")
+     }
+}
+
+impl <T : Clone> Clone for PnSet<T> {
+    fn clone(&self) -> PnSet<T> {
+        PnSet { elements: self.elements.clone() }
+    }
+}
+
+impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for PnSet<T> {
+    fn arbitrary<G: Gen>(g: &mut G) -> PnSet<T> {
+        let elements: Vec<(T, (bool, u64))> = Arbitrary::arbitrary(g);
+        PnSet { elements: elements.move_iter().collect() }
+    }
+    fn shrink(&self) -> Box<Shrinker<PnSet<T>>> {
+        let elements: Vec<(T, (bool, u64))> = self.elements.clone().move_iter().collect();
+        let sets: Vec<PnSet<T>> = elements.shrink().map(|es| PnSet { elements: es.move_iter().collect() }).collect();
+        box sets.move_iter() as Box<Shrinker<PnSet<T>>>
+    }
+}
+
+impl <T : Arbitrary> Arbitrary for PnSetOperation<T> {
+    fn arbitrary<G: Gen>(g: &mut G) -> PnSetOperation<T> {
+        if Arbitrary::arbitrary(g) {
+            PnSetInsert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+        } else {
+            PnSetInsert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+        }
+    }
+    fn shrink(&self) -> Box<Shrinker<PnSetOperation<T>>> {
+        match *self {
+            PnSetInsert(ref element, tid) => {
+                let mut inserts: Vec<PnSetOperation<T>> = element.shrink().map(|e| PnSetInsert(e, tid)).collect();
+                inserts.extend(tid.shrink().map(|t| PnSetInsert(element.clone(), t)));
+                box inserts.move_iter() as Box<Shrinker<PnSetOperation<T>>>
+            }
+            PnSetRemove(ref element, tid) => {
+                let mut removes: Vec<PnSetOperation<T>> = element.shrink().map(|e| PnSetRemove(e, tid)).collect();
+                removes.extend(tid.shrink().map(|t| PnSetRemove(element.clone(), t)));
+                box removes.move_iter() as Box<Shrinker<PnSetOperation<T>>>
+            }
+        }
+    }
+}
+
+
 
 
 #[cfg(test)]
@@ -784,6 +1059,9 @@ mod test {
 
     #[phase(plugin)]
     extern crate quickcheck_macros;
+    extern crate quickcheck;
+
+    use quickcheck::{Arbitrary, Gen, Shrinker};
 
     use Crdt;
     use set::{GSet, GSetInsert, TpSet, TpSetOperation, LwwSet, LwwSetOperation};
