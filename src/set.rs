@@ -319,7 +319,7 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
 
     /// Returns true if the set contains the value.
     pub fn contains(&self, value: &T) -> bool {
-        *self.elements.find(value).unwrap_or(&false)
+        *self.elements.get(value).unwrap_or(&false)
     }
 
     /// Returns true if the set contains no elements.
@@ -368,7 +368,7 @@ impl <T : Hash + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
         for (element, is_present) in other.elements.into_iter() {
             if is_present {
                 match self.elements.entry(element) {
-                    Occupied(entry) => (),
+                    Occupied(_) => (),
                     Vacant(entry) => { entry.set(is_present); },
                 }
             } else {
@@ -424,7 +424,7 @@ impl <T : Eq + Hash> PartialOrd for TpSet<T> {
                     break;
                 }
             } else {
-                match self.elements.find(element) {
+                match self.elements.get(element) {
                     Some(&false) => (),
                     _ => {
                         self_is_greater = false;
@@ -440,7 +440,7 @@ impl <T : Eq + Hash> PartialOrd for TpSet<T> {
                     break;
                 }
             } else {
-                match other.elements.find(element) {
+                match other.elements.get(element) {
                     Some(&false) => (),
                     _ => {
                         other_is_greater = false;
@@ -572,7 +572,7 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
                 entry.set((true, transaction_id));
                 true
             },
-            other => false,
+            _ => false,
         };
 
         if updated {
@@ -606,7 +606,7 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
                 entry.set((false, transaction_id));
                 true
             },
-            other => false,
+            _ => false,
         };
 
         if updated {
@@ -623,7 +623,7 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
 
     /// Returns true if the set contains the value.
     pub fn contains(&self, value: &T) -> bool {
-        self.elements.find(value).map(|&(is_present, _)| is_present).unwrap_or(false)
+        self.elements.get(value).map(|&(is_present, _)| is_present).unwrap_or(false)
     }
 
     /// Returns true if the set contains no elements.
@@ -719,7 +719,7 @@ impl <T : Eq + Hash + Show> PartialOrd for LwwSet<T> {
             self.elements
                 .iter()
                 .any(|(element, &(_, self_tid))| {
-                    other.elements.find(element).map_or(true, |&(_, other_tid)| {
+                    other.elements.get(element).map_or(true, |&(_, other_tid)| {
                         self_tid > other_tid
                     })
                 });
@@ -728,7 +728,7 @@ impl <T : Eq + Hash + Show> PartialOrd for LwwSet<T> {
             other.elements
                 .iter()
                 .any(|(element, &(_, other_tid))| {
-                        self.elements.find(element).map_or(true, |&(_, self_tid)| {
+                        self.elements.get(element).map_or(true, |&(_, self_tid)| {
                         other_tid > self_tid
                     })
                 });
@@ -816,11 +816,10 @@ mod test {
     extern crate quickcheck_macros;
     extern crate quickcheck;
 
-    use quickcheck::{Arbitrary, Gen, Shrinker};
-
-    use Crdt;
     use set::{GSet, GSetInsert, TpSet, TpSetOp, LwwSet, LwwSetOp};
     use std::u64;
+
+    use Crdt;
 
     #[quickcheck]
     fn gset_local_insert(elements: Vec<u8>) -> bool {

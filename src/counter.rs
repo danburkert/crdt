@@ -124,7 +124,7 @@ impl Crdt<GCounterIncrement> for GCounter {
     /// ```
     fn merge(&mut self, other: GCounter) {
         for (replica_id, other_count) in other.counts.iter() {
-            let count = match self.counts.find_mut(&replica_id) {
+            let count = match self.counts.get_mut(&replica_id) {
                 Some(self_count) => cmp::max(*self_count, *other_count),
                 None => *other_count
             };
@@ -150,7 +150,7 @@ impl Crdt<GCounterIncrement> for GCounter {
     /// assert_eq!(13, local.count());
     /// ```
     fn apply(&mut self, operation: GCounterIncrement) {
-        let count = match self.counts.find_mut(&operation.replica_id) {
+        let count = match self.counts.get_mut(&operation.replica_id) {
             Some(self_count) => *self_count + operation.amount,
             None => operation.amount
         };
@@ -174,7 +174,7 @@ impl PartialOrd for GCounter {
         /// Precondition: `a.counts.len() <= b.counts.len()`
         fn a_gt_b(a: &GCounter, b: &GCounter) -> bool {
             for (replica_id, a_count) in a.counts.iter() {
-                match b.counts.find(&replica_id) {
+                match b.counts.get(&replica_id) {
                     Some(b_count) if a_count > b_count => return true,
                     None => return true,
                     _ => ()
@@ -344,7 +344,7 @@ impl Crdt<PnCounterIncrement> for PnCounter {
     /// ```
     fn merge(&mut self, other: PnCounter) {
         for (replica_id, &(other_p, other_n)) in other.counts.iter() {
-            let count = match self.counts.find(&replica_id) {
+            let count = match self.counts.get(&replica_id) {
                 Some(&(self_p, self_n)) => (cmp::max(self_p, other_p), cmp::max(self_n, other_n)),
                 None => (other_p, other_n)
             };
@@ -377,7 +377,7 @@ impl Crdt<PnCounterIncrement> for PnCounter {
                 (0, operation.amount.abs() as u64)
             };
 
-        let count = match self.counts.find_mut(&operation.replica_id) {
+        let count = match self.counts.get_mut(&operation.replica_id) {
             Some(&(self_p, self_n)) => (self_p + p_amount, self_n + n_amount),
             None => (p_amount, n_amount)
         };
@@ -402,7 +402,7 @@ impl PartialOrd for PnCounter {
         /// Precondition: `a.counts.len() <= b.counts.len()`
         fn a_gt_b(a: &PnCounter, b: &PnCounter) -> bool {
             for (replica_id, &(a_p_count, a_n_count)) in a.counts.iter() {
-                match b.counts.find(&replica_id) {
+                match b.counts.get(&replica_id) {
                     Some(&(b_p_count, b_n_count))
                         if a_p_count > b_p_count || a_n_count > b_n_count => return true,
                     None => return true,
@@ -463,9 +463,6 @@ mod test {
 
     #[phase(plugin)]
     extern crate quickcheck_macros;
-
-    use quickcheck::{Arbitrary, Gen, Shrinker};
-
 
     use std::iter::AdditiveIterator;
 

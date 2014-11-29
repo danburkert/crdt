@@ -174,8 +174,6 @@ mod test {
 
     extern crate quickcheck;
 
-    use quickcheck::{Arbitrary, Gen, Shrinker};
-
     use Crdt;
     use register::LwwRegister;
 

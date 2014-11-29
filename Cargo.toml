@@ -10,7 +10,6 @@ repository = "https://github.com/danburkert/crdt.git"
 readme = "README.md"
 keywords = ["library", "distributed", "crdt"]
 
-
 [dependencies.quickcheck]
 git = "https://github.com/BurntSushi/quickcheck.git"
 
