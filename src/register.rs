@@ -157,7 +157,7 @@ impl <T : Arbitrary> Arbitrary for LwwRegister<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> LwwRegister<T> {
         LwwRegister { value: Arbitrary::arbitrary(g), transaction_id: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<LwwRegister<T>>> {
+    fn shrink(&self) -> Box<Shrinker<LwwRegister<T>>+'static> {
         let tuple = (self.value.clone(), self.transaction_id);
         box tuple
             .shrink()

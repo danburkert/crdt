@@ -3,6 +3,7 @@
 use std::cmp;
 use std::collections::TrieMap;
 use std::iter::AdditiveIterator;
+use std::num::SignedInt;
 
 use Crdt;
 use test::gen_replica_id;
@@ -202,10 +203,10 @@ impl Arbitrary for GCounter {
     fn arbitrary<G: Gen>(g: &mut G) -> GCounter {
         GCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<GCounter>> {
-        let replica_id = self.replica_id();
+    fn shrink(&self) -> Box<Shrinker<GCounter>+'static> {
+        let replica_id: uint = self.replica_id().clone();
         box self.counts.shrink().map(|counts| GCounter { replica_id: replica_id, counts: counts })
-            as Box<Shrinker<GCounter>>
+            as Box<Shrinker<GCounter>+'static>
     }
 }
 
@@ -219,10 +220,10 @@ impl Arbitrary for GCounterIncrement {
     fn arbitrary<G: Gen>(g: &mut G) -> GCounterIncrement {
         GCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<GCounterIncrement>> {
+    fn shrink(&self) -> Box<Shrinker<GCounterIncrement>+'static> {
         let replica_id = self.replica_id();
         box self.amount.shrink().map(|amount| GCounterIncrement { replica_id: replica_id, amount: amount })
-            as Box<Shrinker<GCounterIncrement>>
+            as Box<Shrinker<GCounterIncrement>+'static>
     }
 }
 
@@ -230,14 +231,14 @@ impl Arbitrary for GCounterIncrement {
 #[deriving(Show, Clone)]
 pub struct PnCounter {
     replica_id: uint,
-    counts: TrieMap<(u64, u64)>
+    counts: TrieMap<(u64, u64)>,
 }
 
 /// An increment or decrement operation over `PnCounter` CRDTs.
 #[deriving(Show, Clone)]
 pub struct PnCounterIncrement {
     replica_id: uint,
-    amount: i64
+    amount: i64,
 }
 
 impl PnCounter {
@@ -433,11 +434,11 @@ impl Arbitrary for PnCounter {
         PnCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
     }
 
-    fn shrink(&self) -> Box<Shrinker<PnCounter>> {
+    fn shrink(&self) -> Box<Shrinker<PnCounter>+'static> {
         let replica_id = self.replica_id();
 
         box self.counts.shrink().map(|counts| PnCounter { replica_id: replica_id, counts: counts })
-            as Box<Shrinker<PnCounter>>
+            as Box<Shrinker<PnCounter>+'static>
     }
 }
 
@@ -451,10 +452,10 @@ impl Arbitrary for PnCounterIncrement {
     fn arbitrary<G: Gen>(g: &mut G) -> PnCounterIncrement {
         PnCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<PnCounterIncrement>> {
+    fn shrink(&self) -> Box<Shrinker<PnCounterIncrement>+'static> {
         let replica_id = self.replica_id();
         box self.amount.shrink().map(|amount| PnCounterIncrement { replica_id: replica_id, amount: amount })
-            as Box<Shrinker<PnCounterIncrement>>
+            as Box<Shrinker<PnCounterIncrement>+'static>
     }
 }
 

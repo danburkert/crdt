@@ -49,6 +49,7 @@
 //! needed.
 
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::{Occupied, Vacant};
 use std::fmt::{Show, Formatter, Error};
 use std::hash::Hash;
 
@@ -141,7 +142,7 @@ impl <T : Hash + Eq + Clone> Crdt<GSetInsert<T>> for GSet<T> {
     /// assert!(local.contains(&2));
     /// ```
     fn merge(&mut self, other: GSet<T>) {
-        for element in other.elements.move_iter() {
+        for element in other.elements.into_iter() {
             self.insert(element);
         }
     }
@@ -205,14 +206,14 @@ impl <T : Clone> Clone for GSet<T> {
 impl <T : Arbitrary + Eq + Hash> Arbitrary for GSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> GSet<T> {
         let elements: Vec<T> = Arbitrary::arbitrary(g);
-        GSet { elements: elements.move_iter().collect() }
+        GSet { elements: elements.into_iter().collect() }
     }
-    fn shrink(&self) -> Box<Shrinker<GSet<T>>> {
-        let elements: Vec<T> = self.elements.clone().move_iter().collect();
+    fn shrink(&self) -> Box<Shrinker<GSet<T>>+'static> {
+        let elements: Vec<T> = self.elements.clone().into_iter().collect();
         let sets: Vec<GSet<T>> = elements.shrink()
-                                         .map(|es| GSet { elements: es.move_iter().collect() })
+                                         .map(|es| GSet { elements: es.into_iter().collect() })
                                          .collect();
-        box sets.move_iter() as Box<Shrinker<GSet<T>>>
+        box sets.into_iter() as Box<Shrinker<GSet<T>>>
     }
 }
 
@@ -220,12 +221,12 @@ impl <T : Arbitrary> Arbitrary for GSetInsert<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> GSetInsert<T> {
         GSetInsert { element: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<GSetInsert<T>>> {
+    fn shrink(&self) -> Box<Shrinker<GSetInsert<T>>+'static> {
         let inserts: Vec<GSetInsert<T>> = self.element
                                               .shrink()
                                               .map(|e| GSetInsert { element: e })
                                               .collect();
-        box inserts.move_iter() as Box<Shrinker<GSetInsert<T>>>
+        box inserts.into_iter() as Box<Shrinker<GSetInsert<T>>>
     }
 }
 
@@ -292,10 +293,16 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
     /// assert!(!set.contains(&"first-element"));
     /// ```
     pub fn remove(&mut self, element: T) -> Option<TpSetOp<T>> {
-        if self.elements.insert(element.clone(), false) {
-            Some(TpSetOp::Remove(element))
-        } else {
-            None
+        match self.elements.entry(element) {
+            Vacant(entry) => {
+                entry.set(false);
+                Some(TpSetOp::Remove(element))
+            },
+            Occupied(entry) if *entry.get() => {
+                entry.set(false);
+                Some(TpSetOp::Remove(element))
+            },
+            Occupied(_) => None,
         }
     }
 
@@ -346,9 +353,12 @@ impl <T : Hash + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
     /// assert_eq!(1, local.len());
     /// ```
     fn merge(&mut self, other: TpSet<T>) {
-        for (element, is_present) in other.elements.move_iter() {
+        for (element, is_present) in other.elements.into_iter() {
             if is_present {
-                self.elements.find_or_insert(element, is_present);
+                match self.elements.entry(element) {
+                    Occupied(entry) => (),
+                    Vacant(entry) => { entry.set(is_present); },
+                }
             } else {
                 self.elements.insert(element, is_present);
             }
@@ -470,12 +480,12 @@ impl <T : Clone> Clone for TpSet<T> {
 impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for TpSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> TpSet<T> {
         let elements: Vec<(T, bool)> = Arbitrary::arbitrary(g);
-        TpSet { elements: elements.move_iter().collect() }
+        TpSet { elements: elements.into_iter().collect() }
     }
-    fn shrink(&self) -> Box<Shrinker<TpSet<T>>> {
-        let elements: Vec<(T, bool)> = self.elements.clone().move_iter().collect();
-        let sets: Vec<TpSet<T>> = elements.shrink().map(|es| TpSet { elements: es.move_iter().collect() }).collect();
-        box sets.move_iter() as Box<Shrinker<TpSet<T>>>
+    fn shrink(&self) -> Box<Shrinker<TpSet<T>>+'static> {
+        let elements: Vec<(T, bool)> = self.elements.clone().into_iter().collect();
+        let sets: Vec<TpSet<T>> = elements.shrink().map(|es| TpSet { elements: es.into_iter().collect() }).collect();
+        box sets.into_iter() as Box<Shrinker<TpSet<T>>>
     }
 }
 
@@ -487,15 +497,15 @@ impl <T : Arbitrary> Arbitrary for TpSetOp<T> {
             TpSetOp::Insert(Arbitrary::arbitrary(g))
         }
     }
-    fn shrink(&self) -> Box<Shrinker<TpSetOp<T>>> {
+    fn shrink(&self) -> Box<Shrinker<TpSetOp<T>>+'static> {
         match *self {
             TpSetOp::Insert(ref element) => {
                 let inserts: Vec<TpSetOp<T>> = element.shrink().map(|e| TpSetOp::Insert(e)).collect();
-                box inserts.move_iter() as Box<Shrinker<TpSetOp<T>>>
+                box inserts.into_iter() as Box<Shrinker<TpSetOp<T>>>
             }
             TpSetOp::Remove(ref element) => {
                 let removes: Vec<TpSetOp<T>> = element.shrink().map(|e| TpSetOp::Remove(e)).collect();
-                box removes.move_iter() as Box<Shrinker<TpSetOp<T>>>
+                box removes.into_iter() as Box<Shrinker<TpSetOp<T>>>
             }
         }
     }
@@ -541,13 +551,19 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     /// assert!(set.contains(&"first-element"));
     /// ```
     pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOp<T>> {
-        let &(_, latest_tid) = self.elements.insert_or_update_with(element.clone(), (true, transaction_id),
-            |_, entry| {
-                if transaction_id >= entry.val1() {
-                    *entry = (true, transaction_id)
-                }
-            });
-        if transaction_id == latest_tid {
+        let updated = match self.elements.entry(element) {
+            Occupied(entry) if transaction_id >= entry.get().val1() => {
+                entry.set((true, transaction_id));
+                true
+            },
+            Vacant(entry) => {
+                entry.set((true, transaction_id));
+                true
+            },
+            other => false,
+        };
+
+        if updated {
             Some(LwwSetOp::Insert(element, transaction_id))
         } else {
             None
@@ -568,13 +584,20 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     /// assert!(!set.contains(&"first-element"));
     /// ```
     pub fn remove(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOp<T>> {
-        let &(_, latest_tid) = self.elements.insert_or_update_with(element.clone(), (false, transaction_id),
-            |_, entry| {
-                if transaction_id > entry.val1() {
-                    *entry = (false, transaction_id);
-                }
-            });
-        if transaction_id == latest_tid {
+
+        let updated = match self.elements.entry(element) {
+            Occupied(entry) if transaction_id > entry.get().val1() => {
+                entry.set((false, transaction_id));
+                true
+            },
+            Vacant(entry) => {
+                entry.set((false, transaction_id));
+                true
+            },
+            other => false,
+        };
+
+        if updated {
             Some(LwwSetOp::Remove(element, transaction_id))
         } else {
             None
@@ -627,7 +650,7 @@ impl <T : Hash + Eq + Clone + Show> Crdt<LwwSetOp<T>> for LwwSet<T> {
     /// assert_eq!(1, local.len());
     /// ```
     fn merge(&mut self, other: LwwSet<T>) {
-        for (element, (is_present, tid)) in other.elements.move_iter() {
+        for (element, (is_present, tid)) in other.elements.into_iter() {
             if is_present {
                 self.insert(element, tid);
             } else {
@@ -735,12 +758,12 @@ impl <T : Clone> Clone for LwwSet<T> {
 impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for LwwSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> LwwSet<T> {
         let elements: Vec<(T, (bool, u64))> = Arbitrary::arbitrary(g);
-        LwwSet { elements: elements.move_iter().collect() }
+        LwwSet { elements: elements.into_iter().collect() }
     }
-    fn shrink(&self) -> Box<Shrinker<LwwSet<T>>> {
-        let elements: Vec<(T, (bool, u64))> = self.elements.clone().move_iter().collect();
-        let sets: Vec<LwwSet<T>> = elements.shrink().map(|es| LwwSet { elements: es.move_iter().collect() }).collect();
-        box sets.move_iter() as Box<Shrinker<LwwSet<T>>>
+    fn shrink(&self) -> Box<Shrinker<LwwSet<T>>+'static> {
+        let elements: Vec<(T, (bool, u64))> = self.elements.clone().into_iter().collect();
+        let sets: Vec<LwwSet<T>> = elements.shrink().map(|es| LwwSet { elements: es.into_iter().collect() }).collect();
+        box sets.into_iter() as Box<Shrinker<LwwSet<T>>>
     }
 }
 
@@ -752,295 +775,21 @@ impl <T : Arbitrary> Arbitrary for LwwSetOp<T> {
             LwwSetOp::Insert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
         }
     }
-    fn shrink(&self) -> Box<Shrinker<LwwSetOp<T>>> {
+    fn shrink(&self) -> Box<Shrinker<LwwSetOp<T>>+'static> {
         match *self {
             LwwSetOp::Insert(ref element, tid) => {
                 let mut inserts: Vec<LwwSetOp<T>> = element.shrink().map(|e| LwwSetOp::Insert(e, tid)).collect();
                 inserts.extend(tid.shrink().map(|t| LwwSetOp::Insert(element.clone(), t)));
-                box inserts.move_iter() as Box<Shrinker<LwwSetOp<T>>>
+                box inserts.into_iter() as Box<Shrinker<LwwSetOp<T>>>
             }
             LwwSetOp::Remove(ref element, tid) => {
                 let mut removes: Vec<LwwSetOp<T>> = element.shrink().map(|e| LwwSetOp::Remove(e, tid)).collect();
                 removes.extend(tid.shrink().map(|t| LwwSetOp::Remove(element.clone(), t)));
-                box removes.move_iter() as Box<Shrinker<LwwSetOp<T>>>
+                box removes.into_iter() as Box<Shrinker<LwwSetOp<T>>>
             }
         }
     }
 }
-
-/// A counting add/remove set.
-pub struct PnSet<T> {
-    replica_id: uint,
-    elements: HashMap<T, PnCounter>
-}
-
-/// An insert or remove operation over `PnSet` CRDTs.
-#[deriving(Clone, Show, PartialEq, Eq, Hash)]
-pub enum PnSetOp<T> {
-    Insert(T),
-    Remove(T),
-}
-
-impl <T : Hash + Eq + Clone> PnSet<T> {
-
-    /// Create a new counting add/remove set with the provided replica id.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use crdt::set::PnSet;
-    ///
-    /// let mut set = PnSet::<int>::new(0);
-    /// assert!(set.is_empty());
-    /// ```
-    pub fn new(replica_id: uint) -> PnSet<T> {
-        PnSet { replica_id: replica_id, elements: HashMap::new() }
-    }
-
-    /// Insert an element into a two-phase set.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use crdt::set::PnSet;
-    ///
-    /// let mut set = PnSet::new(0);
-    /// set.insert("first-element");
-    /// assert!(set.contains(&"first-element"));
-    /// ```
-    pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<PnSetOp<T>> {
-        let &(_, latest_tid) =
-            self.elements.insert_or_update_with(
-                element.clone(),
-                (true, transaction_id),
-                |_, entry| {
-                    if transaction_id >= entry.val1() {
-                        *entry = (true, transaction_id)
-                    }
-                });
-        if transaction_id == latest_tid {
-            Some(PnSetOp::Insert(element, transaction_id))
-        } else {
-            None
-        }
-    }
-
-    /// Remove an element from a two-phase set.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use crdt::set::PnSet;
-    ///
-    /// let mut set = PnSet::new();
-    /// set.insert("first-element", 0);
-    /// assert!(set.contains(&"first-element"));
-    /// set.remove("first-element", 1);
-    /// assert!(!set.contains(&"first-element"));
-    /// ```
-    pub fn remove(&mut self, element: T, transaction_id: u64) -> Option<PnSetOp<T>> {
-        let &(_, latest_tid) = self.elements.insert_or_update_with(element.clone(), (false, transaction_id),
-            |_, entry| {
-                if transaction_id > entry.val1() {
-                    *entry = (false, transaction_id);
-                }
-            });
-        if transaction_id == latest_tid {
-            Some(PnSetOp::Remove(element, transaction_id))
-        } else {
-            None
-        }
-    }
-
-    /// Returns the number of elements in the set.
-    fn len(&self) -> uint {
-        self.elements.iter().filter(|&(_, &(is_present, _))| is_present).count()
-    }
-
-    fn contains(&self, value: &T) -> bool {
-        self.elements.find(value).map(|&(is_present, _)| is_present).unwrap_or(false)
-    }
-    fn is_subset(&self, other: &PnSet<T>) -> bool {
-        self.elements
-            .iter()
-            .all(|(element, &(is_present, _))| !is_present || other.contains(element))
-    }
-    fn is_disjoint(&self, other: &PnSet<T>) -> bool {
-        self.elements
-            .iter()
-            .all(|(element, &(is_present, _))| !is_present || !other.contains(element))
-    }
-}
-
-impl <T : Hash + Eq + Clone + Show> Crdt<PnSetOp<T>> for PnSet<T> {
-
-    /// Merge a replica into the set.
-    ///
-    /// This method is used to perform state-based replication.
-    ///
-    /// ##### Example
-    ///
-    /// ```
-    /// # use crdt::set::PnSet;
-    /// use crdt::Crdt;
-    ///
-    /// let mut local = PnSet::new();
-    /// let mut remote = PnSet::new();
-    ///
-    /// local.insert(1i, 0);
-    /// remote.insert(1, 1);
-    /// remote.insert(2, 2);
-    /// remote.remove(1, 3);
-    ///
-    /// local.merge(remote);
-    /// assert!(local.contains(&2));
-    /// assert!(!local.contains(&1));
-    /// assert_eq!(1, local.len());
-    /// ```
-    fn merge(&mut self, other: PnSet<T>) {
-        for (element, (is_present, tid)) in other.elements.move_iter() {
-            if is_present {
-                self.insert(element, tid);
-            } else {
-                self.remove(element, tid);
-            }
-        }
-    }
-
-    /// Apply an insert operation to the set.
-    ///
-    /// This method is used to perform operation-based replication.
-    ///
-    /// ##### Example
-    ///
-    /// ```
-    /// # use crdt::set::PnSet;
-    /// # use crdt::Crdt;
-    /// let mut local = PnSet::new();
-    /// let mut remote = PnSet::new();
-    ///
-    /// let op = remote.insert(13i, 0).expect("PnSet should be empty.");
-    ///
-    /// local.apply(op);
-    /// assert!(local.contains(&13));
-    /// ```
-    fn apply(&mut self, operation: PnSetOp<T>) {
-        match operation {
-            PnSetOp::Insert(element, tid) => { self.insert(element, tid); },
-            PnSetOp::Remove(element, tid) => { self.remove(element, tid); }
-        }
-    }
-}
-
-impl <T : Eq + Hash> PartialEq for PnSet<T> {
-    fn eq(&self, other: &PnSet<T>) -> bool {
-        self.elements == other.elements
-    }
-}
-
-impl <T : Eq + Hash> Eq for PnSet<T> {}
-
-impl <T : Eq + Hash + Show> PartialOrd for PnSet<T> {
-    fn partial_cmp(&self, other: &PnSet<T>) -> Option<Ordering> {
-        if self.elements == other.elements {
-            return Some(Equal);
-        }
-        let self_is_greater =
-            self.elements
-                .iter()
-                .any(|(element, &(_, self_tid))| {
-                    other.elements.find(element).map_or(true, |&(_, other_tid)| {
-                        self_tid > other_tid
-                    })
-                });
-
-        let other_is_greater =
-            other.elements
-                .iter()
-                .any(|(element, &(_, other_tid))| {
-                        self.elements.find(element).map_or(true, |&(_, self_tid)| {
-                        other_tid > self_tid
-                    })
-                });
-
-        if self_is_greater && other_is_greater {
-            None
-        } else if self_is_greater {
-            Some(Greater)
-        } else {
-            Some(Less)
-        }
-    }
-}
-
-impl <T : Eq + Hash + Show> Show for PnSet<T> {
-     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-         try!(write!(f, "{{present: {{"));
-         for (i, x) in self.elements
-                           .iter()
-                           .filter(|&(_, &(is_present, _))| is_present)
-                           .map(|(e, &(_, tid))| (e, tid))
-                           .enumerate() {
-             if i != 0 { try!(write!(f, ", ")); }
-             try!(write!(f, "{}", x))
-         }
-         try!(write!(f, "}}, removed: {{"));
-         for (i, x) in self.elements
-                           .iter()
-                           .filter(|&(_, &(is_present, _))| !is_present)
-                           .map(|(e, &(_, tid))| (e, tid))
-                           .enumerate() {
-             if i != 0 { try!(write!(f, ", ")); }
-             try!(write!(f, "{}", x))
-         }
-         write!(f, "}}}}")
-     }
-}
-
-impl <T : Clone> Clone for PnSet<T> {
-    fn clone(&self) -> PnSet<T> {
-        PnSet { elements: self.elements.clone() }
-    }
-}
-
-impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for PnSet<T> {
-    fn arbitrary<G: Gen>(g: &mut G) -> PnSet<T> {
-        let elements: Vec<(T, (bool, u64))> = Arbitrary::arbitrary(g);
-        PnSet { elements: elements.move_iter().collect() }
-    }
-    fn shrink(&self) -> Box<Shrinker<PnSet<T>>> {
-        let elements: Vec<(T, (bool, u64))> = self.elements.clone().move_iter().collect();
-        let sets: Vec<PnSet<T>> = elements.shrink().map(|es| PnSet { elements: es.move_iter().collect() }).collect();
-        box sets.move_iter() as Box<Shrinker<PnSet<T>>>
-    }
-}
-
-impl <T : Arbitrary> Arbitrary for PnSetOp<T> {
-    fn arbitrary<G: Gen>(g: &mut G) -> PnSetOp<T> {
-        if Arbitrary::arbitrary(g) {
-            PnSetOp::Insert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
-        } else {
-            PnSetOp::Insert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
-        }
-    }
-    fn shrink(&self) -> Box<Shrinker<PnSetOp<T>>> {
-        match *self {
-            PnSetOp::Insert(ref element, tid) => {
-                let mut inserts: Vec<PnSetOp<T>> = element.shrink().map(|e| PnSetOp::Insert(e, tid)).collect();
-                inserts.extend(tid.shrink().map(|t| PnSetOp::Insert(element.clone(), t)));
-                box inserts.move_iter() as Box<Shrinker<PnSetOp<T>>>
-            }
-            PnSetOp::Remove(ref element, tid) => {
-                let mut removes: Vec<PnSetOp<T>> = element.shrink().map(|e| PnSetOp::Remove(e, tid)).collect();
-                removes.extend(tid.shrink().map(|t| PnSetOp::Remove(element.clone(), t)));
-                box removes.move_iter() as Box<Shrinker<PnSetOp<T>>>
-            }
-        }
-    }
-}
-
-
-
 
 #[cfg(test)]
 mod test {
@@ -1058,7 +807,7 @@ mod test {
     #[quickcheck]
     fn gset_local_insert(elements: Vec<u8>) -> bool {
         let mut set = GSet::new();
-        for element in elements.clone().move_iter() {
+        for element in elements.clone().into_iter() {
             set.insert(element);
         }
 
@@ -1068,10 +817,10 @@ mod test {
     #[quickcheck]
     fn gset_apply_is_commutative(inserts: Vec<GSetInsert<u8>>) -> bool {
         // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<GSetInsert<u8>> = inserts.move_iter().take(5).collect();
+        let truncated: Vec<GSetInsert<u8>> = inserts.into_iter().take(5).collect();
 
         let mut reference = GSet::new();
-        for insert in truncated.clone().move_iter() {
+        for insert in truncated.clone().into_iter() {
             reference.apply(insert);
         }
 
@@ -1089,10 +838,10 @@ mod test {
     #[quickcheck]
     fn gset_merge_is_commutative(counters: Vec<GSet<u8>>) -> bool {
         // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<GSet<u8>> = counters.move_iter().take(4).collect();
+        let truncated: Vec<GSet<u8>> = counters.into_iter().take(4).collect();
 
         let mut reference = GSet::new();
-        for set in truncated.clone().move_iter() {
+        for set in truncated.clone().into_iter() {
             reference.merge(set);
         }
 
@@ -1139,7 +888,7 @@ mod test {
     #[quickcheck]
     fn tpset_local_insert(elements: Vec<u8>) -> bool {
         let mut set = TpSet::new();
-        for element in elements.clone().move_iter() {
+        for element in elements.clone().into_iter() {
             set.insert(element);
         }
 
@@ -1149,10 +898,10 @@ mod test {
     #[quickcheck]
     fn tpset_apply_is_commutative(operations: Vec<TpSetOp<u8>>) -> bool {
         // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<TpSetOp<u8>> = operations.move_iter().take(5).collect();
+        let truncated: Vec<TpSetOp<u8>> = operations.into_iter().take(5).collect();
 
         let mut reference = TpSet::new();
-        for operation in truncated.clone().move_iter() {
+        for operation in truncated.clone().into_iter() {
             reference.apply(operation);
         }
 
@@ -1170,10 +919,10 @@ mod test {
     #[quickcheck]
     fn tpset_merge_is_commutative(counters: Vec<TpSet<u8>>) -> bool {
         // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<TpSet<u8>> = counters.move_iter().take(4).collect();
+        let truncated: Vec<TpSet<u8>> = counters.into_iter().take(4).collect();
 
         let mut reference = TpSet::new();
-        for set in truncated.clone().move_iter() {
+        for set in truncated.clone().into_iter() {
             reference.merge(set);
         }
 
@@ -1219,7 +968,7 @@ mod test {
     #[quickcheck]
     fn lwwset_local_insert(elements: Vec<u8>) -> bool {
         let mut set = LwwSet::new();
-        for element in elements.clone().move_iter() {
+        for element in elements.clone().into_iter() {
             set.insert(element, 0);
         }
 
@@ -1229,10 +978,10 @@ mod test {
     #[quickcheck]
     fn lwwset_apply_is_commutative(operations: Vec<LwwSetOp<u8>>) -> bool {
         // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<LwwSetOp<u8>> = operations.move_iter().take(5).collect();
+        let truncated: Vec<LwwSetOp<u8>> = operations.into_iter().take(5).collect();
 
         let mut reference = LwwSet::new();
-        for operation in truncated.clone().move_iter() {
+        for operation in truncated.clone().into_iter() {
             reference.apply(operation);
         }
 
@@ -1250,10 +999,10 @@ mod test {
     #[quickcheck]
     fn lwwset_merge_is_commutative(counters: Vec<LwwSet<u8>>) -> bool {
         // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<LwwSet<u8>> = counters.move_iter().take(4).collect();
+        let truncated: Vec<LwwSet<u8>> = counters.into_iter().take(4).collect();
 
         let mut reference = LwwSet::new();
-        for set in truncated.clone().move_iter() {
+        for set in truncated.clone().into_iter() {
             reference.merge(set);
         }
 
