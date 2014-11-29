@@ -191,10 +191,10 @@ mod test {
     #[quickcheck]
     fn lwwregister_apply_is_commutative(mutations: Vec<LwwRegister<String>>) -> bool {
         // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<LwwRegister<String>> = mutations.move_iter().take(6).collect();
+        let truncated: Vec<LwwRegister<String>> = mutations.into_iter().take(6).collect();
 
         let mut reference = LwwRegister::new("".to_string(), 0);
-        for increment in truncated.clone().move_iter() {
+        for increment in truncated.clone().into_iter() {
             reference.apply(increment);
         }
 
@@ -212,10 +212,10 @@ mod test {
     #[quickcheck]
     fn lwwregister_merge_is_commutative(counters: Vec<LwwRegister<String>>) -> bool {
         // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<LwwRegister<String>> = counters.move_iter().take(5).collect();
+        let truncated: Vec<LwwRegister<String>> = counters.into_iter().take(5).collect();
 
         let mut reference = LwwRegister::new("".to_string(), 0);
-        for counter in truncated.clone().move_iter() {
+        for counter in truncated.clone().into_iter() {
             reference.merge(counter);
         }
 

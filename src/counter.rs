@@ -204,9 +204,9 @@ impl Arbitrary for GCounter {
         GCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
     }
     fn shrink(&self) -> Box<Shrinker<GCounter>+'static> {
-        let replica_id: uint = self.replica_id().clone();
-        box self.counts.shrink().map(|counts| GCounter { replica_id: replica_id, counts: counts })
-            as Box<Shrinker<GCounter>+'static>
+        let replica_id: uint = self.replica_id();
+        let shrinks = self.counts.shrink().map(|counts| GCounter { replica_id: replica_id, counts: counts }).collect::<Vec<_>>();
+        box shrinks.into_iter() as Box<Shrinker<GCounter>+'static>
     }
 }
 
@@ -222,8 +222,8 @@ impl Arbitrary for GCounterIncrement {
     }
     fn shrink(&self) -> Box<Shrinker<GCounterIncrement>+'static> {
         let replica_id = self.replica_id();
-        box self.amount.shrink().map(|amount| GCounterIncrement { replica_id: replica_id, amount: amount })
-            as Box<Shrinker<GCounterIncrement>+'static>
+        let shrinks = self.amount.shrink().map(|amount| GCounterIncrement { replica_id: replica_id, amount: amount }).collect::<Vec<_>>();
+        box shrinks.into_iter() as Box<Shrinker<GCounterIncrement>+'static>
     }
 }
 
@@ -436,9 +436,8 @@ impl Arbitrary for PnCounter {
 
     fn shrink(&self) -> Box<Shrinker<PnCounter>+'static> {
         let replica_id = self.replica_id();
-
-        box self.counts.shrink().map(|counts| PnCounter { replica_id: replica_id, counts: counts })
-            as Box<Shrinker<PnCounter>+'static>
+        let shrinks = self.counts.shrink().map(|counts| PnCounter { replica_id: replica_id, counts: counts }).collect::<Vec<_>>();
+        box shrinks.into_iter() as Box<Shrinker<PnCounter>+'static>
     }
 }
 
@@ -454,8 +453,8 @@ impl Arbitrary for PnCounterIncrement {
     }
     fn shrink(&self) -> Box<Shrinker<PnCounterIncrement>+'static> {
         let replica_id = self.replica_id();
-        box self.amount.shrink().map(|amount| PnCounterIncrement { replica_id: replica_id, amount: amount })
-            as Box<Shrinker<PnCounterIncrement>+'static>
+        let shrinks = self.amount.shrink().map(|amount| PnCounterIncrement { replica_id: replica_id, amount: amount }).collect::<Vec<_>>();
+        box shrinks.into_iter() as Box<Shrinker<PnCounterIncrement>+'static>
     }
 }
 
@@ -479,16 +478,16 @@ mod test {
         for &amount in increments.iter() {
             counter.increment(amount as u64);
         }
-        increments.move_iter().sum() as u64 == counter.count()
+        increments.into_iter().sum() as u64 == counter.count()
     }
 
     #[quickcheck]
     fn gcounter_apply_is_commutative(increments: Vec<GCounterIncrement>) -> bool {
         // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<GCounterIncrement> = increments.move_iter().take(5).collect();
+        let truncated: Vec<GCounterIncrement> = increments.into_iter().take(5).collect();
 
         let mut reference = GCounter::new(0);
-        for increment in truncated.clone().move_iter() {
+        for increment in truncated.clone().into_iter() {
             reference.apply(increment);
         }
 
@@ -506,10 +505,10 @@ mod test {
     #[quickcheck]
     fn gcounter_merge_is_commutative(counters: Vec<GCounter>) -> bool {
         // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<GCounter> = counters.move_iter().take(5).collect();
+        let truncated: Vec<GCounter> = counters.into_iter().take(5).collect();
 
         let mut reference = GCounter::new(0);
-        for counter in truncated.clone().move_iter() {
+        for counter in truncated.clone().into_iter() {
             reference.merge(counter);
         }
 
@@ -560,16 +559,16 @@ mod test {
         for &amount in increments.iter() {
             counter.increment(amount as i64);
         }
-        increments.move_iter().sum() as i64 == counter.count()
+        increments.into_iter().sum() as i64 == counter.count()
     }
 
     #[quickcheck]
     fn pncounter_apply_is_commutative(increments: Vec<PnCounterIncrement>) -> bool {
         // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<PnCounterIncrement> = increments.move_iter().take(5).collect();
+        let truncated: Vec<PnCounterIncrement> = increments.into_iter().take(5).collect();
 
         let mut reference = PnCounter::new(0);
-        for increment in truncated.clone().move_iter() {
+        for increment in truncated.clone().into_iter() {
             reference.apply(increment);
         }
 
@@ -587,10 +586,10 @@ mod test {
     #[quickcheck]
     fn pncounter_merge_is_commutative(counters: Vec<PnCounter>) -> bool {
         // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<PnCounter> = counters.move_iter().take(5).collect();
+        let truncated: Vec<PnCounter> = counters.into_iter().take(5).collect();
 
         let mut reference = PnCounter::new(0);
-        for counter in truncated.clone().move_iter() {
+        for counter in truncated.clone().into_iter() {
             reference.merge(counter);
         }
 

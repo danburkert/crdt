@@ -3,9 +3,16 @@
 name = "crdt"
 version = "0.0.1"
 authors = ["Dan Burkert <dan@danburkert.com>"]
+license = "Apache-2.0"
+
+description = "Convergent and Commutative Replicated Data Types for Rust"
+repository = "https://github.com/danburkert/crdt.git"
+readme = "README.md"
+keywords = ["library", "distributed", "crdt"]
+
 
 [dependencies.quickcheck]
-quickcheck = "*"
+git = "https://github.com/BurntSushi/quickcheck.git"
 
-[dev-dependencies.quickcheck_macros]
-quickcheck_macros = "*"
+[dependencies.quickcheck_macros]
+git = "https://github.com/BurntSushi/quickcheck.git"

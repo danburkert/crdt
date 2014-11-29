@@ -105,17 +105,23 @@ impl <T : Hash + Eq + Clone> GSet<T> {
     }
 
     /// Returns the number of elements in the set.
-    fn len(&self) -> uint {
+    pub fn len(&self) -> uint {
         self.elements.len()
     }
 
-    fn contains(&self, value: &T) -> bool {
+    /// Returns true if the set contains the value.
+    pub fn contains(&self, value: &T) -> bool {
         self.elements.contains(value)
     }
-    fn is_subset(&self, other: &GSet<T>) -> bool {
+
+    /// Returns true if the set contains no elements.
+    pub fn is_empty(&self) -> bool{ self.len() == 0 }
+
+    pub fn is_subset(&self, other: &GSet<T>) -> bool {
         self.elements.is_subset(&other.elements)
     }
-    fn is_disjoint(&self, other: &GSet<T>) -> bool {
+
+    pub fn is_disjoint(&self, other: &GSet<T>) -> bool {
         self.elements.is_disjoint(&other.elements)
     }
 }
@@ -293,12 +299,12 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
     /// assert!(!set.contains(&"first-element"));
     /// ```
     pub fn remove(&mut self, element: T) -> Option<TpSetOp<T>> {
-        match self.elements.entry(element) {
+        match self.elements.entry(element.clone()) {
             Vacant(entry) => {
                 entry.set(false);
                 Some(TpSetOp::Remove(element))
             },
-            Occupied(entry) if *entry.get() => {
+            Occupied(ref mut entry) if *entry.get() => {
                 entry.set(false);
                 Some(TpSetOp::Remove(element))
             },
@@ -307,20 +313,26 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
     }
 
     /// Returns the number of elements in the set.
-    fn len(&self) -> uint {
+    pub fn len(&self) -> uint {
         self.elements.iter().filter(|&(_, &is_present)| is_present).count()
     }
 
-    fn contains(&self, value: &T) -> bool {
+    /// Returns true if the set contains the value.
+    pub fn contains(&self, value: &T) -> bool {
         *self.elements.find(value).unwrap_or(&false)
     }
-    fn is_subset(&self, other: &TpSet<T>) -> bool {
+
+    /// Returns true if the set contains no elements.
+    pub fn is_empty(&self) -> bool{ self.len() == 0 }
+
+    pub fn is_subset(&self, other: &TpSet<T>) -> bool {
         for (element, &is_present) in self.elements.iter() {
             if is_present && !other.contains(element) { return false; }
         }
         true
     }
-    fn is_disjoint(&self, other: &TpSet<T>) -> bool {
+
+    pub fn is_disjoint(&self, other: &TpSet<T>) -> bool {
         for (element, &is_present) in self.elements.iter() {
             if is_present && other.contains(element) { return false; }
         }
@@ -551,8 +563,8 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     /// assert!(set.contains(&"first-element"));
     /// ```
     pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOp<T>> {
-        let updated = match self.elements.entry(element) {
-            Occupied(entry) if transaction_id >= entry.get().val1() => {
+        let updated = match self.elements.entry(element.clone()) {
+            Occupied(ref mut entry) if transaction_id >= entry.get().val1() => {
                 entry.set((true, transaction_id));
                 true
             },
@@ -585,8 +597,8 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     /// ```
     pub fn remove(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOp<T>> {
 
-        let updated = match self.elements.entry(element) {
-            Occupied(entry) if transaction_id > entry.get().val1() => {
+        let updated = match self.elements.entry(element.clone()) {
+            Occupied(ref mut entry) if transaction_id > entry.get().val1() => {
                 entry.set((false, transaction_id));
                 true
             },
@@ -605,19 +617,25 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     }
 
     /// Returns the number of elements in the set.
-    fn len(&self) -> uint {
+    pub fn len(&self) -> uint {
         self.elements.iter().filter(|&(_, &(is_present, _))| is_present).count()
     }
 
-    fn contains(&self, value: &T) -> bool {
+    /// Returns true if the set contains the value.
+    pub fn contains(&self, value: &T) -> bool {
         self.elements.find(value).map(|&(is_present, _)| is_present).unwrap_or(false)
     }
-    fn is_subset(&self, other: &LwwSet<T>) -> bool {
+
+    /// Returns true if the set contains no elements.
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
+
+    pub fn is_subset(&self, other: &LwwSet<T>) -> bool {
         self.elements
             .iter()
             .all(|(element, &(is_present, _))| !is_present || other.contains(element))
     }
-    fn is_disjoint(&self, other: &LwwSet<T>) -> bool {
+
+    pub fn is_disjoint(&self, other: &LwwSet<T>) -> bool {
         self.elements
             .iter()
             .all(|(element, &(is_present, _))| !is_present || !other.contains(element))
