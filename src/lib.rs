@@ -1,9 +1,5 @@
 //! A library of Conflict-free Replicated Data Types.
 //!
-//! Conflict-free replicated data types (also called convergent and commutative
-//! replicated data types) allow for concurrent updates to distributed replicas
-//! with strong eventual consistency and without coordination.
-//!
 //! ###### Further Reading
 //!
 //! 1. [A comprehensive study of Convergent and Commutative Replicated Data Types](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) (Shapiro, et al.)
@@ -75,11 +71,6 @@ pub mod test;
 ///
 /// Equality among CRDT replicas does not take into account the replica ID;
 /// only the operation history is taken into account.
-///
-/// ###### Further Reading
-///
-/// 1. [A comprehensive study of Convergent and Commutative Replicated Data Types](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) (Shapiro, et al.)
-/// 2. [An Optimized Conflict-free Replicated Set](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
 pub trait Crdt<Operation> : PartialOrd + Clone {
 
     /// Merge a replica into this CRDT.
@@ -87,7 +78,7 @@ pub trait Crdt<Operation> : PartialOrd + Clone {
     /// This method is used to perform state-based replication.
     fn merge(&mut self, other: Self);
 
-    /// Apply an increment operation to this CRDT.
+    /// Apply an operation to this CRDT.
     ///
     /// This method is used to perform operation-based replication.
     fn apply(&mut self, operation: Operation);
