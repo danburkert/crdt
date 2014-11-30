@@ -18,7 +18,7 @@ pub struct PnCounter {
 }
 
 /// An increment or decrement operation over `PnCounter` CRDTs.
-#[deriving(Show, Clone)]
+#[deriving(Show, Clone, PartialEq, Eq, Hash)]
 pub struct PnCounterIncrement {
     replica_id: uint,
     amount: i64,

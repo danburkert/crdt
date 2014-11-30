@@ -308,6 +308,8 @@ mod test {
 
     #[quickcheck]
     fn check_ordering_none(mut a: GCounter, mut b: GCounter) -> bool {
+        a.merge(b.clone());
+        b.merge(a.clone());
         a.increment(1);
         b.increment(1);
         a.partial_cmp(&b) == None && b.partial_cmp(&a) == None

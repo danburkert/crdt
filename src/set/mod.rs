@@ -51,7 +51,9 @@
 pub use self::gset::{GSet, GSetInsert};
 pub use self::tpset::{TpSet, TpSetOp};
 pub use self::lwwset::{LwwSet, LwwSetOp};
+pub use self::pnset::{PnSet, PnSetOp};
 
 mod gset;
 mod tpset;
 mod lwwset;
+mod pnset;
