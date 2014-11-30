@@ -5,7 +5,7 @@ version = "0.0.1"
 authors = ["Dan Burkert <dan@danburkert.com>"]
 license = "Apache-2.0"
 
-description = "Convergent and Commutative Replicated Data Types for Rust"
+description = "Conflict-free Replicated Data Types for Rust"
 repository = "https://github.com/danburkert/crdt.git"
 readme = "README.md"
 keywords = ["library", "distributed", "crdt"]
