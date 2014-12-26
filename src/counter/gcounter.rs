@@ -1,5 +1,5 @@
 use std::cmp;
-use std::collections::TrieMap;
+use std::collections::HashMap;
 use std::iter::AdditiveIterator;
 
 use Crdt;
@@ -12,14 +12,14 @@ use quickcheck::{Arbitrary, Gen, Shrinker};
 /// `GCounter` monotonically increases across increment operations.
 #[deriving(Show, Clone)]
 pub struct GCounter {
-    replica_id: uint,
-    counts: TrieMap<u64>
+    replica_id: u64,
+    counts: HashMap<u64, u64>
 }
 
 /// An increment operation over `GCounter` CRDTs.
-#[deriving(Show, Clone)]
+#[deriving(Show, Clone, Copy)]
 pub struct GCounterIncrement {
-    replica_id: uint,
+    replica_id: u64,
     amount: u64
 }
 
@@ -38,8 +38,8 @@ impl GCounter {
     /// let mut counter = GCounter::new(42);
     /// assert_eq!(0, counter.count());
     /// ```
-    pub fn new(replica_id: uint) -> GCounter {
-        GCounter { replica_id: replica_id, counts: TrieMap::new() }
+    pub fn new(replica_id: u64) -> GCounter {
+        GCounter { replica_id: replica_id, counts: HashMap::new() }
     }
 
     /// Get the current count of the counter.
@@ -93,7 +93,7 @@ impl GCounter {
     }
 
     /// Get the replica ID of this counter.
-    fn replica_id(&self) -> uint {
+    fn replica_id(&self) -> u64 {
         self.replica_id
     }
 }
@@ -121,11 +121,11 @@ impl Crdt<GCounterIncrement> for GCounter {
     /// ```
     fn merge(&mut self, other: GCounter) {
         for (replica_id, other_count) in other.counts.iter() {
-            let count = match self.counts.get_mut(&replica_id) {
+            let count = match self.counts.get_mut(replica_id) {
                 Some(self_count) => cmp::max(*self_count, *other_count),
                 None => *other_count
             };
-            self.counts.insert(replica_id, count);
+            self.counts.insert(*replica_id, count);
         }
     }
 
@@ -171,7 +171,7 @@ impl PartialOrd for GCounter {
         /// Precondition: `a.counts.len() <= b.counts.len()`
         fn a_gt_b(a: &GCounter, b: &GCounter) -> bool {
             for (replica_id, a_count) in a.counts.iter() {
-                match b.counts.get(&replica_id) {
+                match b.counts.get(replica_id) {
                     Some(b_count) if a_count > b_count => return true,
                     None => return true,
                     _ => ()
@@ -201,14 +201,14 @@ impl Arbitrary for GCounter {
         GCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
     }
     fn shrink(&self) -> Box<Shrinker<GCounter>+'static> {
-        let replica_id: uint = self.replica_id();
+        let replica_id: u64 = self.replica_id();
         let shrinks = self.counts.shrink().map(|counts| GCounter { replica_id: replica_id, counts: counts }).collect::<Vec<_>>();
         box shrinks.into_iter() as Box<Shrinker<GCounter>+'static>
     }
 }
 
 impl GCounterIncrement {
-    fn replica_id(&self) -> uint {
+    fn replica_id(&self) -> u64 {
         self.replica_id
     }
 }

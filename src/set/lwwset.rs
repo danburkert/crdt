@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::collections::hash_map::{Occupied, Vacant};
+use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::fmt::{Show, Formatter, Error};
 use std::hash::Hash;
 
@@ -48,7 +48,7 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     /// ```
     pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOp<T>> {
         let updated = match self.elements.entry(element.clone()) {
-            Occupied(ref mut entry) if transaction_id >= entry.get().val1() => {
+            Occupied(ref mut entry) if transaction_id >= entry.get().1 => {
                 entry.set((true, transaction_id));
                 true
             },
@@ -82,7 +82,7 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     pub fn remove(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOp<T>> {
 
         let updated = match self.elements.entry(element.clone()) {
-            Occupied(ref mut entry) if transaction_id > entry.get().val1() => {
+            Occupied(ref mut entry) if transaction_id > entry.get().1 => {
                 entry.set((false, transaction_id));
                 true
             },

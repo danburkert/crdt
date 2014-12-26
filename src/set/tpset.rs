@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::collections::hash_map::{Occupied, Vacant};
+use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::fmt::{Show, Formatter, Error};
 use std::hash::Hash;
 

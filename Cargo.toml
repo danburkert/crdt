@@ -10,6 +10,8 @@ repository = "https://github.com/danburkert/crdt.git"
 readme = "README.md"
 keywords = ["library", "distributed", "crdt"]
 
-[dependencies]
-  quickcheck = "*"
-  quickcheck_macros = "*"
+[dependencies.quickcheck]
+  git = "https://github.com/danburkert/quickcheck.git"
+
+[dependencies.quickcheck_macros]
+  git = "https://github.com/danburkert/quickcheck.git"

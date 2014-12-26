@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::collections::hash_map;
-use std::collections::hash_map::{Occupied, Vacant};
+use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::fmt::{Show, Formatter, Error};
 use std::hash::Hash;
-use std::iter;
 
 use quickcheck::{Arbitrary, Gen, Shrinker};
 
@@ -12,7 +11,7 @@ use counter::{PnCounter, PnCounterIncrement};
 
 /// A counting add/remove set.
 pub struct PnSet<T> {
-    replica_id: uint,
+    replica_id: u64,
     elements: HashMap<T, PnCounter>
 }
 
@@ -22,8 +21,6 @@ pub struct PnSetOp<T> {
     element: T,
     counter_op: PnCounterIncrement,
 }
-
-pub type Elements<'a, T> = iter::Map<'a, (&'a T, &'a PnCounter), &'a T, iter::Filter<'a, (&'a T, &'a PnCounter), hash_map::Entries<'a, T, PnCounter>>>;
 
 impl <T : Hash + Eq + Clone> PnSet<T> {
 
@@ -37,7 +34,7 @@ impl <T : Hash + Eq + Clone> PnSet<T> {
     /// let mut set = PnSet::<int>::new(0);
     /// assert!(set.is_empty());
     /// ```
-    pub fn new(replica_id: uint) -> PnSet<T> {
+    pub fn new(replica_id: u64) -> PnSet<T> {
         PnSet { replica_id: replica_id, elements: HashMap::new() }
     }
 
@@ -108,11 +105,8 @@ impl <T : Hash + Eq + Clone> PnSet<T> {
         self.iter().all(|element| !other.contains(element))
     }
 
-    pub fn iter(&self) -> Elements<T> {
-        self.elements
-            .iter()
-            .filter(|t| t.val1().count() > 0)
-            .map(|(element, _)| element)
+    pub fn iter<'a>(&'a self) -> Iter<'a, T> {
+        Iter { inner: self.elements.iter() }
     }
 }
 
@@ -270,5 +264,25 @@ impl <T : Arbitrary> Arbitrary for PnSetOp<T> {
         let mut shrinks: Vec<PnSetOp<T>> = element.shrink().map(|elem| PnSetOp { element: elem, counter_op: self.counter_op }).collect();
         shrinks.extend(self.counter_op.shrink().map(|op| PnSetOp { element: element.clone(), counter_op: op }));
         box shrinks.into_iter() as Box<Shrinker<PnSetOp<T>>+'static>
+    }
+}
+
+pub struct Iter<'a, T: 'a> {
+    inner: hash_map::Entries<'a, T, PnCounter>,
+}
+
+impl<'a, T> Iterator<&'a T> for Iter<'a, T> {
+
+    fn next(&mut self) -> Option<&'a T> {
+        while let Some(item) = self.inner.next() {
+            if item.1.count() > 0 {
+                return Some(item.0)
+            }
+        }
+        None
+    }
+
+    fn size_hint(&self) -> (uint, Option<uint>) {
+        self.inner.size_hint()
     }
 }

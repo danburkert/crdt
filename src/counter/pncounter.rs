@@ -1,7 +1,7 @@
 //! Counter CRDTs.
 
 use std::cmp;
-use std::collections::TrieMap;
+use std::collections::HashMap;
 use std::iter::AdditiveIterator;
 use std::num::SignedInt;
 
@@ -13,14 +13,14 @@ use quickcheck::{Arbitrary, Gen, Shrinker};
 /// A incrementable and decrementable counter.
 #[deriving(Show, Clone)]
 pub struct PnCounter {
-    replica_id: uint,
-    counts: TrieMap<(u64, u64)>,
+    replica_id: u64,
+    counts: HashMap<u64, (u64, u64)>,
 }
 
 /// An increment or decrement operation over `PnCounter` CRDTs.
-#[deriving(Show, Clone, PartialEq, Eq, Hash)]
+#[deriving(Show, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PnCounterIncrement {
-    replica_id: uint,
+    replica_id: u64,
     amount: i64,
 }
 
@@ -39,8 +39,8 @@ impl PnCounter {
     /// let mut counter = PnCounter::new(42);
     /// assert_eq!(0, counter.count());
     /// ```
-    pub fn new(replica_id: uint) -> PnCounter {
-        PnCounter { replica_id: replica_id, counts: TrieMap::new() }
+    pub fn new(replica_id: u64) -> PnCounter {
+        PnCounter { replica_id: replica_id, counts: HashMap::new() }
     }
 
     /// Get the current count of the counter.
@@ -99,7 +99,7 @@ impl PnCounter {
     }
 
     /// Get the replica ID of this counter.
-    fn replica_id(&self) -> uint {
+    fn replica_id(&self) -> u64 {
         self.replica_id
     }
 }
@@ -126,7 +126,7 @@ impl Crdt<PnCounterIncrement> for PnCounter {
     /// assert_eq!(1, local.count());
     /// ```
     fn merge(&mut self, other: PnCounter) {
-        for (replica_id, &(other_p, other_n)) in other.counts.iter() {
+        for (&replica_id, &(other_p, other_n)) in other.counts.iter() {
             let count = match self.counts.get(&replica_id) {
                 Some(&(self_p, self_n)) => (cmp::max(self_p, other_p), cmp::max(self_n, other_n)),
                 None => (other_p, other_n)
@@ -184,7 +184,7 @@ impl PartialOrd for PnCounter {
         ///
         /// Precondition: `a.counts.len() <= b.counts.len()`
         fn a_gt_b(a: &PnCounter, b: &PnCounter) -> bool {
-            for (replica_id, &(a_p_count, a_n_count)) in a.counts.iter() {
+            for (&replica_id, &(a_p_count, a_n_count)) in a.counts.iter() {
                 match b.counts.get(&replica_id) {
                     Some(&(b_p_count, b_n_count))
                         if a_p_count > b_p_count || a_n_count > b_n_count => return true,
@@ -225,7 +225,7 @@ impl Arbitrary for PnCounter {
 }
 
 impl PnCounterIncrement {
-    fn replica_id(&self) -> uint {
+    fn replica_id(&self) -> u64 {
         self.replica_id
     }
 }
