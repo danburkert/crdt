@@ -2,14 +2,12 @@
 //!
 //! ###### Further Reading
 //!
-//! 1. [A comprehensive study of Convergent and Commutative Replicated Data Types](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) (Shapiro, et al.)
-//! 2. [An Optimized Conflict-free Replicated Set](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
-
-#![feature(phase)]
+//! 1. [_A comprehensive study of Convergent and Commutative Replicated Data Types_](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) (Shapiro, et al.)
+//! 2. [_An Optimized Conflict-free Replicated Set_](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
 
 extern crate quickcheck;
 
-#[phase(plugin, link)]
+#[macro_use]
 extern crate log;
 
 pub mod counter;
