@@ -1,6 +1,7 @@
+use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
-use std::collections::hash_map;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
+use std::collections::hash_map;
 use std::fmt::{Show, Formatter, Error};
 use std::hash::Hash;
 
@@ -85,7 +86,7 @@ impl <T : Hash + Eq + Clone> PnSet<T> {
     }
 
     /// Returns the number of elements in the set.
-    pub fn len(&self) -> uint {
+    pub fn len(&self) -> usize {
         self.iter().count()
     }
 
@@ -248,7 +249,7 @@ impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for PnSet<T> {
                 elements: self.elements.clone()
             }
         }));
-        box shrinks.into_iter() as Box<Shrinker<PnSet<T>>+'static>
+        Box::new(shrinks.into_iter()) as Box<Shrinker<PnSet<T>>+'static>
     }
 }
 
@@ -263,12 +264,12 @@ impl <T : Arbitrary> Arbitrary for PnSetOp<T> {
         let element = self.element.clone();
         let mut shrinks: Vec<PnSetOp<T>> = element.shrink().map(|elem| PnSetOp { element: elem, counter_op: self.counter_op }).collect();
         shrinks.extend(self.counter_op.shrink().map(|op| PnSetOp { element: element.clone(), counter_op: op }));
-        box shrinks.into_iter() as Box<Shrinker<PnSetOp<T>>+'static>
+        Box::new(shrinks.into_iter()) as Box<Shrinker<PnSetOp<T>>+'static>
     }
 }
 
 pub struct Iter<'a, T: 'a> {
-    inner: hash_map::Entries<'a, T, PnCounter>,
+    inner: hash_map::Iter<'a, T, PnCounter>,
 }
 
 impl<'a, T> Iterator<&'a T> for Iter<'a, T> {
@@ -282,7 +283,7 @@ impl<'a, T> Iterator<&'a T> for Iter<'a, T> {
         None
     }
 
-    fn size_hint(&self) -> (uint, Option<uint>) {
+    fn size_hint(&self) -> (usize, Option<usize>) {
         self.inner.size_hint()
     }
 }

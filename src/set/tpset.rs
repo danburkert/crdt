@@ -1,3 +1,4 @@
+use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::fmt::{Show, Formatter, Error};
@@ -83,7 +84,7 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
     }
 
     /// Returns the number of elements in the set.
-    pub fn len(&self) -> uint {
+    pub fn len(&self) -> usize {
         self.elements.iter().filter(|&(_, &is_present)| is_present).count()
     }
 
@@ -267,7 +268,7 @@ impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for TpSet<T> {
     fn shrink(&self) -> Box<Shrinker<TpSet<T>>+'static> {
         let elements: Vec<(T, bool)> = self.elements.clone().into_iter().collect();
         let sets: Vec<TpSet<T>> = elements.shrink().map(|es| TpSet { elements: es.into_iter().collect() }).collect();
-        box sets.into_iter() as Box<Shrinker<TpSet<T>>>
+        Box::new(sets.into_iter()) as Box<Shrinker<TpSet<T>>>
     }
 }
 
@@ -283,11 +284,11 @@ impl <T : Arbitrary> Arbitrary for TpSetOp<T> {
         match *self {
             TpSetOp::Insert(ref element) => {
                 let inserts: Vec<TpSetOp<T>> = element.shrink().map(|e| TpSetOp::Insert(e)).collect();
-                box inserts.into_iter() as Box<Shrinker<TpSetOp<T>>>
+                Box::new(inserts.into_iter()) as Box<Shrinker<TpSetOp<T>>>
             }
             TpSetOp::Remove(ref element) => {
                 let removes: Vec<TpSetOp<T>> = element.shrink().map(|e| TpSetOp::Remove(e)).collect();
-                box removes.into_iter() as Box<Shrinker<TpSetOp<T>>>
+                Box::new(removes.into_iter()) as Box<Shrinker<TpSetOp<T>>>
             }
         }
     }

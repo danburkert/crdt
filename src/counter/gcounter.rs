@@ -1,4 +1,5 @@
 use std::cmp;
+use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 use std::iter::AdditiveIterator;
 
@@ -203,7 +204,7 @@ impl Arbitrary for GCounter {
     fn shrink(&self) -> Box<Shrinker<GCounter>+'static> {
         let replica_id: u64 = self.replica_id();
         let shrinks = self.counts.shrink().map(|counts| GCounter { replica_id: replica_id, counts: counts }).collect::<Vec<_>>();
-        box shrinks.into_iter() as Box<Shrinker<GCounter>+'static>
+        Box::new(shrinks.into_iter()) as Box<Shrinker<GCounter>+'static>
     }
 }
 
@@ -220,7 +221,7 @@ impl Arbitrary for GCounterIncrement {
     fn shrink(&self) -> Box<Shrinker<GCounterIncrement>+'static> {
         let replica_id = self.replica_id();
         let shrinks = self.amount.shrink().map(|amount| GCounterIncrement { replica_id: replica_id, amount: amount }).collect::<Vec<_>>();
-        box shrinks.into_iter() as Box<Shrinker<GCounterIncrement>+'static>
+        Box::new(shrinks.into_iter()) as Box<Shrinker<GCounterIncrement>+'static>
     }
 }
 

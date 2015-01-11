@@ -1,5 +1,7 @@
 //! Register CRDTs.
 
+use std::cmp::Ordering::{self, Greater, Less, Equal};
+
 use Crdt;
 
 use quickcheck::{Arbitrary, Gen, Shrinker};
@@ -159,9 +161,8 @@ impl <T : Arbitrary> Arbitrary for LwwRegister<T> {
     }
     fn shrink(&self) -> Box<Shrinker<LwwRegister<T>>+'static> {
         let tuple = (self.value.clone(), self.transaction_id);
-        box tuple
-            .shrink()
-            .map(|(value, tid)| LwwRegister { value: value, transaction_id: tid })
+        Box::new(tuple.shrink()
+                 .map(|(value, tid)| LwwRegister { value: value, transaction_id: tid }))
             as Box<Shrinker<LwwRegister<T>>>
     }
 }
@@ -169,7 +170,7 @@ impl <T : Arbitrary> Arbitrary for LwwRegister<T> {
 #[cfg(test)]
 mod test {
 
-    #[phase(plugin)]
+    #[plugin]
     extern crate quickcheck_macros;
 
     extern crate quickcheck;

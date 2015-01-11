@@ -1,3 +1,4 @@
+use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::fmt::{Show, Formatter, Error};
@@ -101,7 +102,7 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     }
 
     /// Returns the number of elements in the set.
-    pub fn len(&self) -> uint {
+    pub fn len(&self) -> usize {
         self.elements.iter().filter(|&(_, &(is_present, _))| is_present).count()
     }
 
@@ -265,7 +266,7 @@ impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for LwwSet<T> {
     fn shrink(&self) -> Box<Shrinker<LwwSet<T>>+'static> {
         let elements: Vec<(T, (bool, u64))> = self.elements.clone().into_iter().collect();
         let sets: Vec<LwwSet<T>> = elements.shrink().map(|es| LwwSet { elements: es.into_iter().collect() }).collect();
-        box sets.into_iter() as Box<Shrinker<LwwSet<T>>>
+        Box::new(sets.into_iter()) as Box<Shrinker<LwwSet<T>>>
     }
 }
 
@@ -282,12 +283,12 @@ impl <T : Arbitrary> Arbitrary for LwwSetOp<T> {
             LwwSetOp::Insert(ref element, tid) => {
                 let mut inserts: Vec<LwwSetOp<T>> = element.shrink().map(|e| LwwSetOp::Insert(e, tid)).collect();
                 inserts.extend(tid.shrink().map(|t| LwwSetOp::Insert(element.clone(), t)));
-                box inserts.into_iter() as Box<Shrinker<LwwSetOp<T>>>
+                Box::new(inserts.into_iter()) as Box<Shrinker<LwwSetOp<T>>>
             }
             LwwSetOp::Remove(ref element, tid) => {
                 let mut removes: Vec<LwwSetOp<T>> = element.shrink().map(|e| LwwSetOp::Remove(e, tid)).collect();
                 removes.extend(tid.shrink().map(|t| LwwSetOp::Remove(element.clone(), t)));
-                box removes.into_iter() as Box<Shrinker<LwwSetOp<T>>>
+                Box::new(removes.into_iter()) as Box<Shrinker<LwwSetOp<T>>>
             }
         }
     }

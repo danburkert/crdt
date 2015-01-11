@@ -1,6 +1,8 @@
+use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::{HashSet};
 use std::fmt::{Show, Formatter, Error};
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::RandomState;
 
 use quickcheck::{Arbitrary, Gen, Shrinker};
 
@@ -17,7 +19,7 @@ pub struct GSetInsert<T> {
     element: T
 }
 
-impl <T : Hash + Eq + Clone> GSet<T> {
+impl <T: Eq + Hash<Hasher>> GSet<T> {
 
     /// Create a new grow-only set.
     ///
@@ -53,7 +55,7 @@ impl <T : Hash + Eq + Clone> GSet<T> {
     }
 
     /// Returns the number of elements in the set.
-    pub fn len(&self) -> uint {
+    pub fn len(&self) -> usize {
         self.elements.len()
     }
 
@@ -74,7 +76,7 @@ impl <T : Hash + Eq + Clone> GSet<T> {
     }
 }
 
-impl <T : Hash + Eq + Clone> Crdt<GSetInsert<T>> for GSet<T> {
+impl <T : Hash<Hasher> + Eq + Clone> Crdt<GSetInsert<T>> for GSet<T> {
 
     /// Merge a replica into the set.
     ///
@@ -123,15 +125,15 @@ impl <T : Hash + Eq + Clone> Crdt<GSetInsert<T>> for GSet<T> {
     }
 }
 
-impl <T : Eq + Hash> PartialEq for GSet<T> {
+impl <T : Eq + Hash<Hasher>> PartialEq for GSet<T> {
     fn eq(&self, other: &GSet<T>) -> bool {
         self.elements == other.elements
     }
 }
 
-impl <T : Eq + Hash> Eq for GSet<T> {}
+impl <T : Eq + Hash<Hasher>> Eq for GSet<T> {}
 
-impl <T : Eq + Hash> PartialOrd for GSet<T> {
+impl <T : Eq + Hash<Hasher>> PartialOrd for GSet<T> {
     fn partial_cmp(&self, other: &GSet<T>) -> Option<Ordering> {
         if self.elements == other.elements {
             Some(Equal)
@@ -145,7 +147,7 @@ impl <T : Eq + Hash> PartialOrd for GSet<T> {
     }
 }
 
-impl <T : Eq + Hash + Show> Show for GSet<T> {
+impl <T : Eq + Hash<Hasher> + Show> Show for GSet<T> {
      fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          self.elements.fmt(f)
      }
@@ -157,7 +159,7 @@ impl <T : Clone> Clone for GSet<T> {
     }
 }
 
-impl <T : Arbitrary + Eq + Hash> Arbitrary for GSet<T> {
+impl <T : Arbitrary + Eq + Hash<Hasher>> Arbitrary for GSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> GSet<T> {
         let elements: Vec<T> = Arbitrary::arbitrary(g);
         GSet { elements: elements.into_iter().collect() }
@@ -167,7 +169,7 @@ impl <T : Arbitrary + Eq + Hash> Arbitrary for GSet<T> {
         let sets: Vec<GSet<T>> = elements.shrink()
                                          .map(|es| GSet { elements: es.into_iter().collect() })
                                          .collect();
-        box sets.into_iter() as Box<Shrinker<GSet<T>>>
+        Box::new(sets.into_iter()) as Box<Shrinker<GSet<T>>>
     }
 }
 
@@ -180,7 +182,7 @@ impl <T : Arbitrary> Arbitrary for GSetInsert<T> {
                                               .shrink()
                                               .map(|e| GSetInsert { element: e })
                                               .collect();
-        box inserts.into_iter() as Box<Shrinker<GSetInsert<T>>>
+        Box::new(inserts.into_iter()) as Box<Shrinker<GSetInsert<T>>>
     }
 }
 

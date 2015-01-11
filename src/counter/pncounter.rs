@@ -1,6 +1,7 @@
 //! Counter CRDTs.
 
 use std::cmp;
+use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 use std::iter::AdditiveIterator;
 use std::num::SignedInt;
@@ -220,7 +221,7 @@ impl Arbitrary for PnCounter {
     fn shrink(&self) -> Box<Shrinker<PnCounter>+'static> {
         let replica_id = self.replica_id();
         let shrinks = self.counts.shrink().map(|counts| PnCounter { replica_id: replica_id, counts: counts }).collect::<Vec<_>>();
-        box shrinks.into_iter() as Box<Shrinker<PnCounter>+'static>
+        Box::new(shrinks.into_iter()) as Box<Shrinker<PnCounter>+'static>
     }
 }
 
@@ -237,7 +238,7 @@ impl Arbitrary for PnCounterIncrement {
     fn shrink(&self) -> Box<Shrinker<PnCounterIncrement>+'static> {
         let replica_id = self.replica_id();
         let shrinks = self.amount.shrink().map(|amount| PnCounterIncrement { replica_id: replica_id, amount: amount }).collect::<Vec<_>>();
-        box shrinks.into_iter() as Box<Shrinker<PnCounterIncrement>+'static>
+        Box::new(shrinks.into_iter()) as Box<Shrinker<PnCounterIncrement>+'static>
     }
 }
 
