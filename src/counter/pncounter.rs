@@ -245,6 +245,7 @@ impl Arbitrary for PnCounterIncrement {
 #[cfg(test)]
 mod test {
 
+    use std::cmp::Ordering::Equal;
     use std::iter::AdditiveIterator;
 
     use Crdt;

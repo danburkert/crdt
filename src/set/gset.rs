@@ -189,6 +189,8 @@ impl <T : Arbitrary> Arbitrary for GSetInsert<T> {
 #[cfg(test)]
 mod test {
 
+    use std::cmp::Ordering::Equal;
+
     use Crdt;
     use super::{GSet, GSetInsert};
 

@@ -299,6 +299,8 @@ impl <T : Arbitrary> Arbitrary for TpSetOp<T> {
 #[cfg(test)]
 mod test {
 
+    use std::cmp::Ordering::Equal;
+
     use Crdt;
     use super::{TpSet, TpSetOp};
 

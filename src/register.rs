@@ -170,10 +170,7 @@ impl <T : Arbitrary> Arbitrary for LwwRegister<T> {
 #[cfg(test)]
 mod test {
 
-    #[plugin]
-    extern crate quickcheck_macros;
-
-    extern crate quickcheck;
+    use std::cmp::Ordering::Equal;
 
     use Crdt;
     use register::LwwRegister;

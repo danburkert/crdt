@@ -6,8 +6,13 @@
 //! 2. [_An Optimized Conflict-free Replicated Set_](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
 
 #![allow(unstable)]
+#![feature(plugin)]
 
 extern crate quickcheck;
+
+#[cfg(test)]
+#[plugin]
+extern crate quickcheck_macros;
 
 #[macro_use]
 extern crate log;

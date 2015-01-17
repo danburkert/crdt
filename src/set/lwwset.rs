@@ -298,6 +298,7 @@ impl <T : Arbitrary> Arbitrary for LwwSetOp<T> {
 #[cfg(test)]
 mod test {
 
+    use std::cmp::Ordering::Equal;
     use std::u64;
 
     use Crdt;

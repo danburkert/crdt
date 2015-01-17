@@ -12,7 +12,6 @@ keywords = ["library", "distributed", "crdt"]
 
 [dependencies]
   quickcheck = "*"
-  quickcheck_macros = "*"
 
-[build-dependencies]
-  capnpc = "*"
+[dev-dependencies]
+  quickcheck_macros = "*"
