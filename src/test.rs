@@ -1,9 +1,9 @@
 //! Utility functions for using CRDTs in tests.
 
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::atomic::{AtomicUint, ATOMIC_UINT_INIT};
+use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT};
 
-static mut REPLICA_COUNT: AtomicUint = ATOMIC_UINT_INIT;
+static mut REPLICA_COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
 
 /// Generate a replica ID suitable for local testing.
 ///

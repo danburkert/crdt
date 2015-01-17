@@ -1,6 +1,6 @@
 //! Register CRDTs.
 
-use std::cmp::Ordering::{self, Greater, Less, Equal};
+use std::cmp::Ordering;
 
 use Crdt;
 
@@ -15,7 +15,7 @@ use quickcheck::{Arbitrary, Gen, Shrinker};
 /// `LwwRegister` keeps the value written with the largest transaction ID.
 /// In order to prevent (or limit the period of) lost-writes, transaction
 /// IDs **must** be unique and **should** be globally monotonically increasing.
-#[deriving(Show, Clone)]
+#[derive(Show, Clone)]
 pub struct LwwRegister<T> {
     value: T,
     transaction_id: u64

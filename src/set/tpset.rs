@@ -1,6 +1,7 @@
 use std::cmp::Ordering::{self, Greater, Less, Equal};
-use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
+use std::collections::hash_map::Hasher;
+use std::collections::{HashMap};
 use std::fmt::{Show, Formatter, Error};
 use std::hash::Hash;
 
@@ -14,13 +15,13 @@ pub struct TpSet<T> {
 }
 
 /// An insert or remove operation over `TpSet` CRDTs.
-#[deriving(Clone, Show, PartialEq, Eq, Hash)]
+#[derive(Clone, Show, PartialEq, Eq, Hash)]
 pub enum TpSetOp<T> {
     Insert(T),
     Remove(T),
 }
 
-impl <T : Hash + Eq + Clone> TpSet<T> {
+impl <T : Hash<Hasher> + Eq + Clone> TpSet<T> {
 
     /// Create a new two-phase set.
     ///
@@ -72,11 +73,11 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
     pub fn remove(&mut self, element: T) -> Option<TpSetOp<T>> {
         match self.elements.entry(element.clone()) {
             Vacant(entry) => {
-                entry.set(false);
+                entry.insert(false);
                 Some(TpSetOp::Remove(element))
             },
             Occupied(ref mut entry) if *entry.get() => {
-                entry.set(false);
+                entry.insert(false);
                 Some(TpSetOp::Remove(element))
             },
             Occupied(_) => None,
@@ -111,7 +112,7 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
     }
 }
 
-impl <T : Hash + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
+impl <T : Hash<Hasher> + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
 
     /// Merge a replica into the set.
     ///
@@ -140,7 +141,7 @@ impl <T : Hash + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
             if is_present {
                 match self.elements.entry(element) {
                     Occupied(_) => (),
-                    Vacant(entry) => { entry.set(is_present); },
+                    Vacant(entry) => { entry.insert(is_present); },
                 }
             } else {
                 self.elements.insert(element, is_present);
@@ -173,15 +174,15 @@ impl <T : Hash + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
     }
 }
 
-impl <T : Eq + Hash> PartialEq for TpSet<T> {
+impl <T : Eq + Hash<Hasher>> PartialEq for TpSet<T> {
     fn eq(&self, other: &TpSet<T>) -> bool {
         self.elements == other.elements
     }
 }
 
-impl <T : Eq + Hash> Eq for TpSet<T> {}
+impl <T : Eq + Hash<Hasher>> Eq for TpSet<T> {}
 
-impl <T : Eq + Hash> PartialOrd for TpSet<T> {
+impl <T : Eq + Hash<Hasher>> PartialOrd for TpSet<T> {
     fn partial_cmp(&self, other: &TpSet<T>) -> Option<Ordering> {
         if self.elements == other.elements {
             return Some(Equal);
@@ -230,7 +231,7 @@ impl <T : Eq + Hash> PartialOrd for TpSet<T> {
     }
 }
 
-impl <T : Eq + Hash + Show> Show for TpSet<T> {
+impl <T : Eq + Hash<Hasher> + Show> Show for TpSet<T> {
      fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          try!(write!(f, "{{present: {{"));
          for (i, x) in self.elements
@@ -239,7 +240,7 @@ impl <T : Eq + Hash + Show> Show for TpSet<T> {
                            .map(|(e, _)| e)
                            .enumerate() {
              if i != 0 { try!(write!(f, ", ")); }
-             try!(write!(f, "{}", *x))
+             try!(write!(f, "{:?}", *x))
          }
          try!(write!(f, "}}, removed: {{"));
          for (i, x) in self.elements
@@ -248,7 +249,7 @@ impl <T : Eq + Hash + Show> Show for TpSet<T> {
                            .map(|(e, _)| e)
                            .enumerate() {
              if i != 0 { try!(write!(f, ", ")); }
-             try!(write!(f, "{}", *x))
+             try!(write!(f, "{:?}", *x))
          }
          write!(f, "}}}}")
      }
@@ -260,7 +261,7 @@ impl <T : Clone> Clone for TpSet<T> {
     }
 }
 
-impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for TpSet<T> {
+impl <T : Arbitrary + Eq + Hash<Hasher> + Clone> Arbitrary for TpSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> TpSet<T> {
         let elements: Vec<(T, bool)> = Arbitrary::arbitrary(g);
         TpSet { elements: elements.into_iter().collect() }

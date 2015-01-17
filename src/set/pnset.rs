@@ -1,8 +1,9 @@
 use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
+use std::collections::hash_map::Hasher;
 use std::collections::hash_map;
-use std::fmt::{Show, Formatter, Error};
+use std::fmt::Show;
 use std::hash::Hash;
 
 use quickcheck::{Arbitrary, Gen, Shrinker};
@@ -11,19 +12,20 @@ use Crdt;
 use counter::{PnCounter, PnCounterIncrement};
 
 /// A counting add/remove set.
-pub struct PnSet<T> {
+#[derive(Clone, Show)]
+pub struct PnSet<T : Hash<Hasher> + Eq> {
     replica_id: u64,
     elements: HashMap<T, PnCounter>
 }
 
 /// An insert or remove operation over `PnSet` CRDTs.
-#[deriving(Clone, Show, PartialEq, Eq, Hash)]
+#[derive(Clone, Show, PartialEq, Eq, Hash)]
 pub struct PnSetOp<T> {
     element: T,
     counter_op: PnCounterIncrement,
 }
 
-impl <T : Hash + Eq + Clone> PnSet<T> {
+impl <T : Hash<Hasher> + Eq + Clone> PnSet<T> {
 
     /// Create a new counting add/remove set with the provided replica id.
     ///
@@ -78,7 +80,7 @@ impl <T : Hash + Eq + Clone> PnSet<T> {
             Vacant(entry) => {
                 let mut counter = PnCounter::new(self.replica_id);
                 let counter_op = counter.increment(amount);
-                entry.set(counter);
+                entry.insert(counter);
                 counter_op
             },
         };
@@ -111,7 +113,7 @@ impl <T : Hash + Eq + Clone> PnSet<T> {
     }
 }
 
-impl <T : Hash + Eq + Clone + Show> Crdt<PnSetOp<T>> for PnSet<T> {
+impl <T : Hash<Hasher> + Eq + Clone + Show> Crdt<PnSetOp<T>> for PnSet<T> {
 
     /// Merge a replica into the set.
     ///
@@ -143,7 +145,7 @@ impl <T : Hash + Eq + Clone + Show> Crdt<PnSetOp<T>> for PnSet<T> {
                     entry.get_mut().merge(counter);
                 },
                 Vacant(entry) => {
-                    entry.set(counter);
+                    entry.insert(counter);
                 },
             }
         }
@@ -172,21 +174,21 @@ impl <T : Hash + Eq + Clone + Show> Crdt<PnSetOp<T>> for PnSet<T> {
             Vacant(entry) => {
                 let mut counter = PnCounter::new(self.replica_id);
                 counter.apply(operation.counter_op);
-                entry.set(counter);
+                entry.insert(counter);
             },
         }
     }
 }
 
-impl <T : Eq + Hash> PartialEq for PnSet<T> {
+impl <T : Eq + Hash<Hasher>> PartialEq for PnSet<T> {
     fn eq(&self, other: &PnSet<T>) -> bool {
         self.elements == other.elements
     }
 }
 
-impl <T : Eq + Hash> Eq for PnSet<T> {}
+impl <T : Eq + Hash<Hasher>> Eq for PnSet<T> {}
 
-impl <T : Eq + Hash + Show> PartialOrd for PnSet<T> {
+impl <T : Eq + Hash<Hasher>> PartialOrd for PnSet<T> {
     fn partial_cmp(&self, other: &PnSet<T>) -> Option<Ordering> {
         if self.elements == other.elements {
             return Some(Equal);
@@ -215,19 +217,7 @@ impl <T : Eq + Hash + Show> PartialOrd for PnSet<T> {
     }
 }
 
-impl <T : Eq + Hash + Show> Show for PnSet<T> {
-     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-         write!(f, "{{replica_id: {}, elements: {}}}", self.replica_id, self.elements)
-     }
-}
-
-impl <T : Clone> Clone for PnSet<T> {
-    fn clone(&self) -> PnSet<T> {
-        PnSet { replica_id: self.replica_id, elements: self.elements.clone() }
-    }
-}
-
-impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for PnSet<T> {
+impl <T : Arbitrary + Eq + Hash<Hasher> + Clone> Arbitrary for PnSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> PnSet<T> {
         let elements: Vec<(T, PnCounter)> = Arbitrary::arbitrary(g);
         PnSet {
@@ -272,7 +262,8 @@ pub struct Iter<'a, T: 'a> {
     inner: hash_map::Iter<'a, T, PnCounter>,
 }
 
-impl<'a, T> Iterator<&'a T> for Iter<'a, T> {
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
         while let Some(item) = self.inner.next() {

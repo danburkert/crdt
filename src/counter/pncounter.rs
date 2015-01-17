@@ -12,14 +12,14 @@ use test::gen_replica_id;
 use quickcheck::{Arbitrary, Gen, Shrinker};
 
 /// A incrementable and decrementable counter.
-#[deriving(Show, Clone)]
+#[derive(Show, Clone)]
 pub struct PnCounter {
     replica_id: u64,
     counts: HashMap<u64, (u64, u64)>,
 }
 
 /// An increment or decrement operation over `PnCounter` CRDTs.
-#[deriving(Show, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Show, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PnCounterIncrement {
     replica_id: u64,
     amount: i64,
@@ -162,7 +162,7 @@ impl Crdt<PnCounterIncrement> for PnCounter {
             };
 
         let count = match self.counts.get_mut(&operation.replica_id) {
-            Some(&(self_p, self_n)) => (self_p + p_amount, self_n + n_amount),
+            Some(&mut (self_p, self_n)) => (self_p + p_amount, self_n + n_amount),
             None => (p_amount, n_amount)
         };
 

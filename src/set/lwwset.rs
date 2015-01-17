@@ -1,6 +1,7 @@
 use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
+use std::collections::hash_map::Hasher;
 use std::fmt::{Show, Formatter, Error};
 use std::hash::Hash;
 
@@ -14,13 +15,13 @@ pub struct LwwSet<T> {
 }
 
 /// An insert or remove operation over `LwwSet` CRDTs.
-#[deriving(Clone, Show, PartialEq, Eq, Hash)]
+#[derive(Clone, Show, PartialEq, Eq, Hash)]
 pub enum LwwSetOp<T> {
     Insert(T, u64),
     Remove(T, u64),
 }
 
-impl <T : Hash + Eq + Clone> LwwSet<T> {
+impl <T : Hash<Hasher> + Eq + Clone> LwwSet<T> {
 
     /// Create a new last-writer wins set.
     ///
@@ -50,11 +51,11 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOp<T>> {
         let updated = match self.elements.entry(element.clone()) {
             Occupied(ref mut entry) if transaction_id >= entry.get().1 => {
-                entry.set((true, transaction_id));
+                entry.insert((true, transaction_id));
                 true
             },
             Vacant(entry) => {
-                entry.set((true, transaction_id));
+                entry.insert((true, transaction_id));
                 true
             },
             _ => false,
@@ -84,11 +85,11 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
 
         let updated = match self.elements.entry(element.clone()) {
             Occupied(ref mut entry) if transaction_id > entry.get().1 => {
-                entry.set((false, transaction_id));
+                entry.insert((false, transaction_id));
                 true
             },
             Vacant(entry) => {
-                entry.set((false, transaction_id));
+                entry.insert((false, transaction_id));
                 true
             },
             _ => false,
@@ -127,7 +128,7 @@ impl <T : Hash + Eq + Clone> LwwSet<T> {
     }
 }
 
-impl <T : Hash + Eq + Clone + Show> Crdt<LwwSetOp<T>> for LwwSet<T> {
+impl <T : Hash<Hasher> + Eq + Clone + Show> Crdt<LwwSetOp<T>> for LwwSet<T> {
 
     /// Merge a replica into the set.
     ///
@@ -187,15 +188,15 @@ impl <T : Hash + Eq + Clone + Show> Crdt<LwwSetOp<T>> for LwwSet<T> {
     }
 }
 
-impl <T : Eq + Hash> PartialEq for LwwSet<T> {
+impl <T : Eq + Hash<Hasher>> PartialEq for LwwSet<T> {
     fn eq(&self, other: &LwwSet<T>) -> bool {
         self.elements == other.elements
     }
 }
 
-impl <T : Eq + Hash> Eq for LwwSet<T> {}
+impl <T : Eq + Hash<Hasher>> Eq for LwwSet<T> {}
 
-impl <T : Eq + Hash + Show> PartialOrd for LwwSet<T> {
+impl <T : Eq + Hash<Hasher> + Show> PartialOrd for LwwSet<T> {
     fn partial_cmp(&self, other: &LwwSet<T>) -> Option<Ordering> {
         if self.elements == other.elements {
             return Some(Equal);
@@ -228,7 +229,7 @@ impl <T : Eq + Hash + Show> PartialOrd for LwwSet<T> {
     }
 }
 
-impl <T : Eq + Hash + Show> Show for LwwSet<T> {
+impl <T : Eq + Hash<Hasher> + Show> Show for LwwSet<T> {
      fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          try!(write!(f, "{{present: {{"));
          for (i, x) in self.elements
@@ -237,7 +238,7 @@ impl <T : Eq + Hash + Show> Show for LwwSet<T> {
                            .map(|(e, &(_, tid))| (e, tid))
                            .enumerate() {
              if i != 0 { try!(write!(f, ", ")); }
-             try!(write!(f, "{}", x))
+             try!(write!(f, "{:?}", x))
          }
          try!(write!(f, "}}, removed: {{"));
          for (i, x) in self.elements
@@ -246,7 +247,7 @@ impl <T : Eq + Hash + Show> Show for LwwSet<T> {
                            .map(|(e, &(_, tid))| (e, tid))
                            .enumerate() {
              if i != 0 { try!(write!(f, ", ")); }
-             try!(write!(f, "{}", x))
+             try!(write!(f, "{:?}", x))
          }
          write!(f, "}}}}")
      }
@@ -258,7 +259,7 @@ impl <T : Clone> Clone for LwwSet<T> {
     }
 }
 
-impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for LwwSet<T> {
+impl <T : Arbitrary + Eq + Hash<Hasher> + Clone> Arbitrary for LwwSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> LwwSet<T> {
         let elements: Vec<(T, (bool, u64))> = Arbitrary::arbitrary(g);
         LwwSet { elements: elements.into_iter().collect() }

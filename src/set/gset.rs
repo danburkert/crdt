@@ -1,8 +1,8 @@
 use std::cmp::Ordering::{self, Greater, Less, Equal};
-use std::collections::{HashSet};
+use std::collections::hash_map::Hasher;
+use std::collections::HashSet;
 use std::fmt::{Show, Formatter, Error};
-use std::hash::{Hash, Hasher};
-use std::collections::hash_map::RandomState;
+use std::hash::Hash;
 
 use quickcheck::{Arbitrary, Gen, Shrinker};
 
@@ -14,12 +14,12 @@ pub struct GSet<T> {
 }
 
 /// An insert operation over `GSet` CRDTs.
-#[deriving(Clone, Show, PartialEq, Eq, Hash)]
+#[derive(Clone, Show, PartialEq, Eq, Hash)]
 pub struct GSetInsert<T> {
     element: T
 }
 
-impl <T: Eq + Hash<Hasher>> GSet<T> {
+impl <T: Hash<Hasher> + Eq + Clone> GSet<T> {
 
     /// Create a new grow-only set.
     ///

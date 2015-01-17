@@ -5,6 +5,8 @@
 //! 1. [_A comprehensive study of Convergent and Commutative Replicated Data Types_](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) (Shapiro, et al.)
 //! 2. [_An Optimized Conflict-free Replicated Set_](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
 
+#![allow(unstable)]
+
 extern crate quickcheck;
 
 #[macro_use]
