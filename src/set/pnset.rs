@@ -6,6 +6,7 @@ use std::collections::hash_map;
 use std::fmt::Show;
 use std::hash::Hash;
 
+#[cfg(any(test, quickcheck_generators))]
 use quickcheck::{Arbitrary, Gen, Shrinker};
 
 use Crdt;
@@ -217,6 +218,7 @@ impl <T : Eq + Hash<Hasher>> PartialOrd for PnSet<T> {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl <T : Arbitrary + Eq + Hash<Hasher> + Clone> Arbitrary for PnSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> PnSet<T> {
         let elements: Vec<(T, PnCounter)> = Arbitrary::arbitrary(g);
@@ -243,6 +245,7 @@ impl <T : Arbitrary + Eq + Hash<Hasher> + Clone> Arbitrary for PnSet<T> {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl <T : Arbitrary> Arbitrary for PnSetOp<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> PnSetOp<T> {
         PnSetOp {

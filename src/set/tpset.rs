@@ -5,6 +5,7 @@ use std::collections::{HashMap};
 use std::fmt::{Show, Formatter, Error};
 use std::hash::Hash;
 
+#[cfg(any(test, quickcheck_generators))]
 use quickcheck::{Arbitrary, Gen, Shrinker};
 
 use Crdt;
@@ -261,6 +262,7 @@ impl <T : Clone> Clone for TpSet<T> {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl <T : Arbitrary + Eq + Hash<Hasher> + Clone> Arbitrary for TpSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> TpSet<T> {
         let elements: Vec<(T, bool)> = Arbitrary::arbitrary(g);
@@ -273,6 +275,7 @@ impl <T : Arbitrary + Eq + Hash<Hasher> + Clone> Arbitrary for TpSet<T> {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl <T : Arbitrary> Arbitrary for TpSetOp<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> TpSetOp<T> {
         if Arbitrary::arbitrary(g) {

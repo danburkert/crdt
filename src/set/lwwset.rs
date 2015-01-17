@@ -5,6 +5,7 @@ use std::collections::hash_map::Hasher;
 use std::fmt::{Show, Formatter, Error};
 use std::hash::Hash;
 
+#[cfg(any(test, quickcheck_generators))]
 use quickcheck::{Arbitrary, Gen, Shrinker};
 
 use Crdt;
@@ -259,6 +260,7 @@ impl <T : Clone> Clone for LwwSet<T> {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl <T : Arbitrary + Eq + Hash<Hasher> + Clone> Arbitrary for LwwSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> LwwSet<T> {
         let elements: Vec<(T, (bool, u64))> = Arbitrary::arbitrary(g);
@@ -271,6 +273,7 @@ impl <T : Arbitrary + Eq + Hash<Hasher> + Clone> Arbitrary for LwwSet<T> {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl <T : Arbitrary> Arbitrary for LwwSetOp<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> LwwSetOp<T> {
         if Arbitrary::arbitrary(g) {

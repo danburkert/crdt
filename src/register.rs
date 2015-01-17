@@ -1,10 +1,11 @@
 //! Register CRDTs.
 
+#[cfg(any(test, quickcheck_generators))]
+use quickcheck::{Arbitrary, Gen, Shrinker};
+
 use std::cmp::Ordering;
 
 use Crdt;
-
-use quickcheck::{Arbitrary, Gen, Shrinker};
 
 /// A last-writer-wins register.
 ///
@@ -155,6 +156,7 @@ impl <T> Ord for LwwRegister<T> {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl <T : Arbitrary> Arbitrary for LwwRegister<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> LwwRegister<T> {
         LwwRegister { value: Arbitrary::arbitrary(g), transaction_id: Arbitrary::arbitrary(g) }

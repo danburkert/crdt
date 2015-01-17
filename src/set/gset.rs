@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::fmt::{Show, Formatter, Error};
 use std::hash::Hash;
 
+#[cfg(any(test, quickcheck_generators))]
 use quickcheck::{Arbitrary, Gen, Shrinker};
 
 use Crdt;
@@ -159,6 +160,7 @@ impl <T : Clone> Clone for GSet<T> {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl <T : Arbitrary + Eq + Hash<Hasher>> Arbitrary for GSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> GSet<T> {
         let elements: Vec<T> = Arbitrary::arbitrary(g);
@@ -173,6 +175,7 @@ impl <T : Arbitrary + Eq + Hash<Hasher>> Arbitrary for GSet<T> {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl <T : Arbitrary> Arbitrary for GSetInsert<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> GSetInsert<T> {
         GSetInsert { element: Arbitrary::arbitrary(g) }

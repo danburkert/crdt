@@ -7,9 +7,12 @@ use std::iter::AdditiveIterator;
 use std::num::SignedInt;
 
 use Crdt;
-use test::gen_replica_id;
 
+#[cfg(any(test, quickcheck_generators))]
 use quickcheck::{Arbitrary, Gen, Shrinker};
+
+#[cfg(any(test, quickcheck_generators))]
+use test::gen_replica_id;
 
 /// A incrementable and decrementable counter.
 #[derive(Show, Clone)]
@@ -212,12 +215,11 @@ impl PartialOrd for PnCounter {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl Arbitrary for PnCounter {
-
     fn arbitrary<G: Gen>(g: &mut G) -> PnCounter {
         PnCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
     }
-
     fn shrink(&self) -> Box<Shrinker<PnCounter>+'static> {
         let replica_id = self.replica_id();
         let shrinks = self.counts.shrink().map(|counts| PnCounter { replica_id: replica_id, counts: counts }).collect::<Vec<_>>();
@@ -231,6 +233,7 @@ impl PnCounterIncrement {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl Arbitrary for PnCounterIncrement {
     fn arbitrary<G: Gen>(g: &mut G) -> PnCounterIncrement {
         PnCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }

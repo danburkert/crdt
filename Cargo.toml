@@ -10,8 +10,18 @@ repository = "https://github.com/danburkert/crdt.git"
 readme = "README.md"
 keywords = ["library", "distributed", "crdt"]
 
-[dependencies]
-  quickcheck = "*"
+[features]
+
+default = []
+
+# If enabled, implementations for the quickcheck generator
+# traits are provided for the CRDTs.
+quickcheck_generators = ["quickcheck"]
+
+[dependencies.quickcheck]
+  version = "*"
+  optional = true
 
 [dev-dependencies]
+  quickcheck = "*"
   quickcheck_macros = "*"

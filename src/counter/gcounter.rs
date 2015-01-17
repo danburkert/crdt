@@ -6,6 +6,7 @@ use std::iter::AdditiveIterator;
 use Crdt;
 use test::gen_replica_id;
 
+#[cfg(any(test, quickcheck_generators))]
 use quickcheck::{Arbitrary, Gen, Shrinker};
 
 /// A grow-only counter.
@@ -197,6 +198,7 @@ impl PartialOrd for GCounter {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl Arbitrary for GCounter {
     fn arbitrary<G: Gen>(g: &mut G) -> GCounter {
         GCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
@@ -214,6 +216,7 @@ impl GCounterIncrement {
     }
 }
 
+#[cfg(any(test, quickcheck_generators))]
 impl Arbitrary for GCounterIncrement {
     fn arbitrary<G: Gen>(g: &mut G) -> GCounterIncrement {
         GCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }

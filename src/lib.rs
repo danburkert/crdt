@@ -8,10 +8,11 @@
 #![allow(unstable)]
 #![feature(plugin)]
 
+#[cfg(any(test, quickcheck_generators))]
 extern crate quickcheck;
 
-#[cfg(test)]
 #[plugin]
+#[cfg(test)]
 extern crate quickcheck_macros;
 
 #[macro_use]
