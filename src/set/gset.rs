@@ -1,7 +1,7 @@
 use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::hash_map::Hasher;
 use std::collections::HashSet;
-use std::fmt::{Show, Formatter, Error};
+use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
 
 #[cfg(any(test, quickcheck_generators))]
@@ -15,7 +15,7 @@ pub struct GSet<T> {
 }
 
 /// An insert operation over `GSet` CRDTs.
-#[derive(Clone, Show, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GSetInsert<T> {
     element: T
 }
@@ -148,7 +148,7 @@ impl <T : Eq + Hash<Hasher>> PartialOrd for GSet<T> {
     }
 }
 
-impl <T : Eq + Hash<Hasher> + Show> Show for GSet<T> {
+impl <T : Eq + Hash<Hasher> + Debug> Debug for GSet<T> {
      fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          self.elements.fmt(f)
      }

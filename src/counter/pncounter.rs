@@ -15,14 +15,14 @@ use quickcheck::{Arbitrary, Gen, Shrinker};
 use test::gen_replica_id;
 
 /// A incrementable and decrementable counter.
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub struct PnCounter {
     replica_id: u64,
     counts: HashMap<u64, (u64, u64)>,
 }
 
 /// An increment or decrement operation over `PnCounter` CRDTs.
-#[derive(Show, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PnCounterIncrement {
     replica_id: u64,
     amount: i64,

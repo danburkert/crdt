@@ -16,7 +16,7 @@ use Crdt;
 /// `LwwRegister` keeps the value written with the largest transaction ID.
 /// In order to prevent (or limit the period of) lost-writes, transaction
 /// IDs **must** be unique and **should** be globally monotonically increasing.
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub struct LwwRegister<T> {
     value: T,
     transaction_id: u64

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::hash_map::Hasher;
 use std::collections::hash_map;
-use std::fmt::Show;
+use std::fmt::Debug;
 use std::hash::Hash;
 
 #[cfg(any(test, quickcheck_generators))]
@@ -13,14 +13,14 @@ use Crdt;
 use counter::{PnCounter, PnCounterIncrement};
 
 /// A counting add/remove set.
-#[derive(Clone, Show)]
+#[derive(Clone, Debug)]
 pub struct PnSet<T : Hash<Hasher> + Eq> {
     replica_id: u64,
     elements: HashMap<T, PnCounter>
 }
 
 /// An insert or remove operation over `PnSet` CRDTs.
-#[derive(Clone, Show, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PnSetOp<T> {
     element: T,
     counter_op: PnCounterIncrement,
@@ -114,7 +114,7 @@ impl <T : Hash<Hasher> + Eq + Clone> PnSet<T> {
     }
 }
 
-impl <T : Hash<Hasher> + Eq + Clone + Show> Crdt<PnSetOp<T>> for PnSet<T> {
+impl <T : Hash<Hasher> + Eq + Clone + Debug> Crdt<PnSetOp<T>> for PnSet<T> {
 
     /// Merge a replica into the set.
     ///

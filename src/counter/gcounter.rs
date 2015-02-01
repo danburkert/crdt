@@ -12,14 +12,14 @@ use quickcheck::{Arbitrary, Gen, Shrinker};
 /// A grow-only counter.
 ///
 /// `GCounter` monotonically increases across increment operations.
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub struct GCounter {
     replica_id: u64,
     counts: HashMap<u64, u64>
 }
 
 /// An increment operation over `GCounter` CRDTs.
-#[derive(Show, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct GCounterIncrement {
     replica_id: u64,
     amount: u64

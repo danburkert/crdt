@@ -2,7 +2,7 @@ use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::hash_map::Hasher;
 use std::collections::{HashMap};
-use std::fmt::{Show, Formatter, Error};
+use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
 
 #[cfg(any(test, quickcheck_generators))]
@@ -16,7 +16,7 @@ pub struct TpSet<T> {
 }
 
 /// An insert or remove operation over `TpSet` CRDTs.
-#[derive(Clone, Show, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TpSetOp<T> {
     Insert(T),
     Remove(T),
@@ -232,7 +232,7 @@ impl <T : Eq + Hash<Hasher>> PartialOrd for TpSet<T> {
     }
 }
 
-impl <T : Eq + Hash<Hasher> + Show> Show for TpSet<T> {
+impl <T : Eq + Hash<Hasher> + Debug> Debug for TpSet<T> {
      fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          try!(write!(f, "{{present: {{"));
          for (i, x) in self.elements

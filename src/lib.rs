@@ -5,8 +5,8 @@
 //! 1. [_A comprehensive study of Convergent and Commutative Replicated Data Types_](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) (Shapiro, et al.)
 //! 2. [_An Optimized Conflict-free Replicated Set_](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
 
-#![allow(unstable)]
-#![feature(plugin)]
+#![feature(core, hash, plugin, std_misc)]
+#![cfg_attr(test, feature(collections))]
 
 #[cfg(any(test, quickcheck_generators))]
 extern crate quickcheck;
@@ -14,9 +14,6 @@ extern crate quickcheck;
 #[plugin]
 #[cfg(test)]
 extern crate quickcheck_macros;
-
-#[macro_use]
-extern crate log;
 
 pub mod counter;
 pub mod register;

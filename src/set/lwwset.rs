@@ -2,7 +2,7 @@ use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::hash_map::Hasher;
-use std::fmt::{Show, Formatter, Error};
+use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
 
 #[cfg(any(test, quickcheck_generators))]
@@ -16,7 +16,7 @@ pub struct LwwSet<T> {
 }
 
 /// An insert or remove operation over `LwwSet` CRDTs.
-#[derive(Clone, Show, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LwwSetOp<T> {
     Insert(T, u64),
     Remove(T, u64),
@@ -129,7 +129,7 @@ impl <T : Hash<Hasher> + Eq + Clone> LwwSet<T> {
     }
 }
 
-impl <T : Hash<Hasher> + Eq + Clone + Show> Crdt<LwwSetOp<T>> for LwwSet<T> {
+impl <T : Hash<Hasher> + Eq + Clone + Debug> Crdt<LwwSetOp<T>> for LwwSet<T> {
 
     /// Merge a replica into the set.
     ///
@@ -197,7 +197,7 @@ impl <T : Eq + Hash<Hasher>> PartialEq for LwwSet<T> {
 
 impl <T : Eq + Hash<Hasher>> Eq for LwwSet<T> {}
 
-impl <T : Eq + Hash<Hasher> + Show> PartialOrd for LwwSet<T> {
+impl <T : Eq + Hash<Hasher> + Debug> PartialOrd for LwwSet<T> {
     fn partial_cmp(&self, other: &LwwSet<T>) -> Option<Ordering> {
         if self.elements == other.elements {
             return Some(Equal);
@@ -230,7 +230,7 @@ impl <T : Eq + Hash<Hasher> + Show> PartialOrd for LwwSet<T> {
     }
 }
 
-impl <T : Eq + Hash<Hasher> + Show> Show for LwwSet<T> {
+impl <T : Eq + Hash<Hasher> + Debug> Debug for LwwSet<T> {
      fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          try!(write!(f, "{{present: {{"));
          for (i, x) in self.elements
