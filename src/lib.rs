@@ -7,13 +7,10 @@
 
 #![feature(core, hash, plugin, std_misc)]
 #![cfg_attr(test, feature(collections))]
+#![cfg_attr(test, plugin(quickcheck_macros))]
 
 #[cfg(any(test, quickcheck_generators))]
 extern crate quickcheck;
-
-#[plugin]
-#[cfg(test)]
-extern crate quickcheck_macros;
 
 pub mod counter;
 pub mod register;
