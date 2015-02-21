@@ -1,5 +1,4 @@
 use std::cmp::Ordering::{self, Greater, Less, Equal};
-use std::collections::hash_map::Hasher;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
@@ -20,7 +19,7 @@ pub struct GSetInsert<T> {
     element: T
 }
 
-impl <T: Hash<Hasher> + Eq + Clone> GSet<T> {
+impl <T: Hash + Eq + Clone> GSet<T> {
 
     /// Create a new grow-only set.
     ///
@@ -77,7 +76,7 @@ impl <T: Hash<Hasher> + Eq + Clone> GSet<T> {
     }
 }
 
-impl <T : Hash<Hasher> + Eq + Clone> Crdt<GSetInsert<T>> for GSet<T> {
+impl <T : Hash + Eq + Clone> Crdt<GSetInsert<T>> for GSet<T> {
 
     /// Merge a replica into the set.
     ///
@@ -126,15 +125,15 @@ impl <T : Hash<Hasher> + Eq + Clone> Crdt<GSetInsert<T>> for GSet<T> {
     }
 }
 
-impl <T : Eq + Hash<Hasher>> PartialEq for GSet<T> {
+impl <T : Eq + Hash> PartialEq for GSet<T> {
     fn eq(&self, other: &GSet<T>) -> bool {
         self.elements == other.elements
     }
 }
 
-impl <T : Eq + Hash<Hasher>> Eq for GSet<T> {}
+impl <T : Eq + Hash> Eq for GSet<T> {}
 
-impl <T : Eq + Hash<Hasher>> PartialOrd for GSet<T> {
+impl <T : Eq + Hash> PartialOrd for GSet<T> {
     fn partial_cmp(&self, other: &GSet<T>) -> Option<Ordering> {
         if self.elements == other.elements {
             Some(Equal)
@@ -148,7 +147,7 @@ impl <T : Eq + Hash<Hasher>> PartialOrd for GSet<T> {
     }
 }
 
-impl <T : Eq + Hash<Hasher> + Debug> Debug for GSet<T> {
+impl <T : Eq + Hash + Debug> Debug for GSet<T> {
      fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          self.elements.fmt(f)
      }
@@ -161,7 +160,7 @@ impl <T : Clone> Clone for GSet<T> {
 }
 
 #[cfg(any(test, quickcheck_generators))]
-impl <T : Arbitrary + Eq + Hash<Hasher>> Arbitrary for GSet<T> {
+impl <T : Arbitrary + Eq + Hash> Arbitrary for GSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> GSet<T> {
         let elements: Vec<T> = Arbitrary::arbitrary(g);
         GSet { elements: elements.into_iter().collect() }

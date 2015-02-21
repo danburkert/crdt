@@ -1,7 +1,6 @@
 use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::collections::hash_map::Hasher;
 use std::collections::hash_map;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -14,7 +13,7 @@ use counter::{PnCounter, PnCounterIncrement};
 
 /// A counting add/remove set.
 #[derive(Clone, Debug)]
-pub struct PnSet<T : Hash<Hasher> + Eq> {
+pub struct PnSet<T : Hash + Eq> {
     replica_id: u64,
     elements: HashMap<T, PnCounter>
 }
@@ -26,7 +25,7 @@ pub struct PnSetOp<T> {
     counter_op: PnCounterIncrement,
 }
 
-impl <T : Hash<Hasher> + Eq + Clone> PnSet<T> {
+impl <T : Hash + Eq + Clone> PnSet<T> {
 
     /// Create a new counting add/remove set with the provided replica id.
     ///
@@ -114,7 +113,7 @@ impl <T : Hash<Hasher> + Eq + Clone> PnSet<T> {
     }
 }
 
-impl <T : Hash<Hasher> + Eq + Clone + Debug> Crdt<PnSetOp<T>> for PnSet<T> {
+impl <T : Hash + Eq + Clone + Debug> Crdt<PnSetOp<T>> for PnSet<T> {
 
     /// Merge a replica into the set.
     ///
@@ -181,15 +180,15 @@ impl <T : Hash<Hasher> + Eq + Clone + Debug> Crdt<PnSetOp<T>> for PnSet<T> {
     }
 }
 
-impl <T : Eq + Hash<Hasher>> PartialEq for PnSet<T> {
+impl <T : Eq + Hash> PartialEq for PnSet<T> {
     fn eq(&self, other: &PnSet<T>) -> bool {
         self.elements == other.elements
     }
 }
 
-impl <T : Eq + Hash<Hasher>> Eq for PnSet<T> {}
+impl <T : Eq + Hash> Eq for PnSet<T> {}
 
-impl <T : Eq + Hash<Hasher>> PartialOrd for PnSet<T> {
+impl <T : Eq + Hash> PartialOrd for PnSet<T> {
     fn partial_cmp(&self, other: &PnSet<T>) -> Option<Ordering> {
         if self.elements == other.elements {
             return Some(Equal);
@@ -219,7 +218,7 @@ impl <T : Eq + Hash<Hasher>> PartialOrd for PnSet<T> {
 }
 
 #[cfg(any(test, quickcheck_generators))]
-impl <T : Arbitrary + Eq + Hash<Hasher> + Clone> Arbitrary for PnSet<T> {
+impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for PnSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> PnSet<T> {
         let elements: Vec<(T, PnCounter)> = Arbitrary::arbitrary(g);
         PnSet {

@@ -1,6 +1,5 @@
 use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::collections::hash_map::Hasher;
 use std::collections::{HashMap};
 use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
@@ -22,7 +21,7 @@ pub enum TpSetOp<T> {
     Remove(T),
 }
 
-impl <T : Hash<Hasher> + Eq + Clone> TpSet<T> {
+impl <T : Hash + Eq + Clone> TpSet<T> {
 
     /// Create a new two-phase set.
     ///
@@ -113,7 +112,7 @@ impl <T : Hash<Hasher> + Eq + Clone> TpSet<T> {
     }
 }
 
-impl <T : Hash<Hasher> + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
+impl <T : Hash + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
 
     /// Merge a replica into the set.
     ///
@@ -175,15 +174,15 @@ impl <T : Hash<Hasher> + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
     }
 }
 
-impl <T : Eq + Hash<Hasher>> PartialEq for TpSet<T> {
+impl <T : Eq + Hash> PartialEq for TpSet<T> {
     fn eq(&self, other: &TpSet<T>) -> bool {
         self.elements == other.elements
     }
 }
 
-impl <T : Eq + Hash<Hasher>> Eq for TpSet<T> {}
+impl <T : Eq + Hash> Eq for TpSet<T> {}
 
-impl <T : Eq + Hash<Hasher>> PartialOrd for TpSet<T> {
+impl <T : Eq + Hash> PartialOrd for TpSet<T> {
     fn partial_cmp(&self, other: &TpSet<T>) -> Option<Ordering> {
         if self.elements == other.elements {
             return Some(Equal);
@@ -232,7 +231,7 @@ impl <T : Eq + Hash<Hasher>> PartialOrd for TpSet<T> {
     }
 }
 
-impl <T : Eq + Hash<Hasher> + Debug> Debug for TpSet<T> {
+impl <T : Eq + Hash + Debug> Debug for TpSet<T> {
      fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          try!(write!(f, "{{present: {{"));
          for (i, x) in self.elements
@@ -263,7 +262,7 @@ impl <T : Clone> Clone for TpSet<T> {
 }
 
 #[cfg(any(test, quickcheck_generators))]
-impl <T : Arbitrary + Eq + Hash<Hasher> + Clone> Arbitrary for TpSet<T> {
+impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for TpSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> TpSet<T> {
         let elements: Vec<(T, bool)> = Arbitrary::arbitrary(g);
         TpSet { elements: elements.into_iter().collect() }
