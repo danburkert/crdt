@@ -76,7 +76,9 @@ impl <T: Hash + Eq + Clone> GSet<T> {
     }
 }
 
-impl <T : Hash + Eq + Clone> Crdt<GSetInsert<T>> for GSet<T> {
+impl <T> Crdt for GSet<T> where T: Clone + Eq + Hash {
+
+    type Operation = GSetInsert<T>;
 
     /// Merge a replica into the set.
     ///

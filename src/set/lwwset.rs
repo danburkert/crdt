@@ -10,7 +10,7 @@ use quickcheck::{Arbitrary, Gen};
 use Crdt;
 
 /// A last-writer wins set.
-#[derive(Clone)]
+#[derive(Clone, Eq)]
 pub struct LwwSet<T> where T: Hash {
     elements: HashMap<T, (bool, u64)>
 }
@@ -129,7 +129,9 @@ impl <T> LwwSet<T> where T: Clone + Eq + Hash {
     }
 }
 
-impl <T : Hash + Eq + Clone + Debug> Crdt<LwwSetOp<T>> for LwwSet<T> {
+impl <T> Crdt for LwwSet<T> where T: Clone + Eq + Hash {
+
+    type Operation = LwwSetOp<T>;
 
     /// Merge a replica into the set.
     ///
@@ -195,9 +197,7 @@ impl <T : Eq + Hash> PartialEq for LwwSet<T> {
     }
 }
 
-impl <T : Eq + Hash> Eq for LwwSet<T> {}
-
-impl <T : Eq + Hash + Debug> PartialOrd for LwwSet<T> {
+impl <T> PartialOrd for LwwSet<T> where T: Eq + Hash {
     fn partial_cmp(&self, other: &LwwSet<T>) -> Option<Ordering> {
         if self.elements == other.elements {
             return Some(Equal);
@@ -230,7 +230,7 @@ impl <T : Eq + Hash + Debug> PartialOrd for LwwSet<T> {
     }
 }
 
-impl <T : Eq + Hash + Debug> Debug for LwwSet<T> {
+impl <T> Debug for LwwSet<T> where T: Debug + Eq + Hash {
      fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          try!(write!(f, "{{present: {{"));
          for (i, x) in self.elements

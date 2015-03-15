@@ -2,7 +2,6 @@ use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::hash_map;
-use std::fmt::Debug;
 use std::hash::Hash;
 
 #[cfg(any(test, quickcheck_generators))]
@@ -12,8 +11,8 @@ use Crdt;
 use counter::{PnCounter, PnCounterIncrement};
 
 /// A counting add/remove set.
-#[derive(Clone, Debug)]
-pub struct PnSet<T : Hash + Eq> {
+#[derive(Clone)]
+pub struct PnSet<T> {
     replica_id: u64,
     elements: HashMap<T, PnCounter>
 }
@@ -25,7 +24,7 @@ pub struct PnSetOp<T> {
     counter_op: PnCounterIncrement,
 }
 
-impl <T : Hash + Eq + Clone> PnSet<T> {
+impl <T> PnSet<T> where T: Clone + Eq + Hash {
 
     /// Create a new counting add/remove set with the provided replica id.
     ///
@@ -113,7 +112,9 @@ impl <T : Hash + Eq + Clone> PnSet<T> {
     }
 }
 
-impl <T : Hash + Eq + Clone + Debug> Crdt<PnSetOp<T>> for PnSet<T> {
+impl <T> Crdt for PnSet<T> where T: Clone + Eq + Hash {
+
+    type Operation = PnSetOp<T>;
 
     /// Merge a replica into the set.
     ///

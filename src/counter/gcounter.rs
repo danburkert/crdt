@@ -102,7 +102,9 @@ impl GCounter {
     }
 }
 
-impl Crdt<GCounterIncrement> for GCounter {
+impl Crdt for GCounter {
+
+    type Operation = GCounterIncrement;
 
     /// Merge a replica into this counter.
     ///

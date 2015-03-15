@@ -113,7 +113,9 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
     }
 }
 
-impl <T> Crdt<TpSetOp<T>> for TpSet<T> where T: Clone + Eq + Hash {
+impl <T> Crdt for TpSet<T> where T: Clone + Eq + Hash {
+
+    type Operation = TpSetOp<T>;
 
     /// Merge a replica into the set.
     ///

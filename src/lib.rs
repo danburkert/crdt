@@ -42,7 +42,7 @@ pub mod test;
 ///
 /// ###### Replica ID
 ///
-/// Many CRDTs require a `uint` identifier, or replica ID, upon creation. The
+/// Many CRDTs require a `u64` identifier, or replica ID, upon creation. The
 /// replica ID **must** be unique among replicas, so it should be taken from
 /// unique per-replica configuration, or from a source of strong coordination
 /// such as [ZooKeeper](http://zookeeper.apache.org/) or
@@ -71,7 +71,9 @@ pub mod test;
 ///
 /// Equality among CRDT replicas does not take into account the replica ID;
 /// only the operation history is taken into account.
-pub trait Crdt<Operation> : PartialOrd + Clone {
+pub trait Crdt : Clone + Eq + PartialOrd {
+
+    type Operation;
 
     /// Merge a replica into this CRDT.
     ///
@@ -81,5 +83,5 @@ pub trait Crdt<Operation> : PartialOrd + Clone {
     /// Apply an operation to this CRDT.
     ///
     /// This method is used to perform operation-based replication.
-    fn apply(&mut self, operation: Operation);
+    fn apply(&mut self, operation: Self::Operation);
 }

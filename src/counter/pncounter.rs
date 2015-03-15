@@ -108,7 +108,9 @@ impl PnCounter {
     }
 }
 
-impl Crdt<PnCounterIncrement> for PnCounter {
+impl Crdt for PnCounter {
+
+    type Operation = PnCounterIncrement;
 
     /// Merge a replica into this counter.
     ///

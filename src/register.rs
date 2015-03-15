@@ -89,7 +89,9 @@ impl <T : Clone> LwwRegister<T> {
     }
 }
 
-impl <T : Clone> Crdt<LwwRegister<T>> for LwwRegister<T> {
+impl <T> Crdt for LwwRegister<T> where T: Clone {
+
+    type Operation = LwwRegister<T>;
 
     /// Merge a replica into this register.
     ///
