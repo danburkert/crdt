@@ -4,7 +4,7 @@ use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
 
 #[cfg(any(test, quickcheck_generators))]
-use quickcheck::{Arbitrary, Gen, Shrinker};
+use quickcheck::{Arbitrary, Gen};
 
 use Crdt;
 
@@ -160,31 +160,24 @@ impl <T : Clone> Clone for GSet<T> {
 }
 
 #[cfg(any(test, quickcheck_generators))]
-impl <T : Arbitrary + Eq + Hash> Arbitrary for GSet<T> {
-    fn arbitrary<G: Gen>(g: &mut G) -> GSet<T> {
+impl <T> Arbitrary for GSet<T> where T: Arbitrary + Clone + Eq + Hash {
+    fn arbitrary<G>(g: &mut G) -> GSet<T> where G: Gen {
         let elements: Vec<T> = Arbitrary::arbitrary(g);
         GSet { elements: elements.into_iter().collect() }
     }
-    fn shrink(&self) -> Box<Shrinker<GSet<T>>+'static> {
-        let elements: Vec<T> = self.elements.clone().into_iter().collect();
-        let sets: Vec<GSet<T>> = elements.shrink()
-                                         .map(|es| GSet { elements: es.into_iter().collect() })
-                                         .collect();
-        Box::new(sets.into_iter()) as Box<Shrinker<GSet<T>>>
+    fn shrink(&self) -> Box<Iterator<Item=GSet<T>> + 'static> {
+        let elements: Vec<T> = self.elements.iter().cloned().collect();
+        Box::new(elements.shrink().map(|es| GSet { elements: es.into_iter().collect() }))
     }
 }
 
 #[cfg(any(test, quickcheck_generators))]
-impl <T : Arbitrary> Arbitrary for GSetInsert<T> {
+impl <T> Arbitrary for GSetInsert<T> where T: Arbitrary {
     fn arbitrary<G: Gen>(g: &mut G) -> GSetInsert<T> {
         GSetInsert { element: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<GSetInsert<T>>+'static> {
-        let inserts: Vec<GSetInsert<T>> = self.element
-                                              .shrink()
-                                              .map(|e| GSetInsert { element: e })
-                                              .collect();
-        Box::new(inserts.into_iter()) as Box<Shrinker<GSetInsert<T>>>
+    fn shrink(&self) -> Box<Iterator<Item=GSetInsert<T>> + 'static> {
+        Box::new(self.element.shrink().map(|e| GSetInsert { element: e }))
     }
 }
 

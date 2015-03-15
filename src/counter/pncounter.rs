@@ -9,20 +9,20 @@ use std::num::SignedInt;
 use Crdt;
 
 #[cfg(any(test, quickcheck_generators))]
-use quickcheck::{Arbitrary, Gen, Shrinker};
+use quickcheck::{Arbitrary, Gen};
 
 #[cfg(any(test, quickcheck_generators))]
 use test::gen_replica_id;
 
 /// A incrementable and decrementable counter.
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Eq)]
 pub struct PnCounter {
     replica_id: u64,
     counts: HashMap<u64, (u64, u64)>,
 }
 
 /// An increment or decrement operation over `PnCounter` CRDTs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct PnCounterIncrement {
     replica_id: u64,
     amount: i64,
@@ -103,7 +103,7 @@ impl PnCounter {
     }
 
     /// Get the replica ID of this counter.
-    fn replica_id(&self) -> u64 {
+    pub fn replica_id(&self) -> u64 {
         self.replica_id
     }
 }
@@ -179,8 +179,6 @@ impl PartialEq for PnCounter {
     }
 }
 
-impl Eq for PnCounter {}
-
 impl PartialOrd for PnCounter {
     fn partial_cmp(&self, other: &PnCounter) -> Option<Ordering> {
 
@@ -217,31 +215,29 @@ impl PartialOrd for PnCounter {
 
 #[cfg(any(test, quickcheck_generators))]
 impl Arbitrary for PnCounter {
-    fn arbitrary<G: Gen>(g: &mut G) -> PnCounter {
+    fn arbitrary<G>(g: &mut G) -> PnCounter where G: Gen {
         PnCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<PnCounter>+'static> {
+    fn shrink(&self) -> Box<Iterator<Item=PnCounter> + 'static> {
         let replica_id = self.replica_id();
-        let shrinks = self.counts.shrink().map(|counts| PnCounter { replica_id: replica_id, counts: counts }).collect::<Vec<_>>();
-        Box::new(shrinks.into_iter()) as Box<Shrinker<PnCounter>+'static>
+        Box::new(self.counts.shrink().map(move |counts| PnCounter { replica_id: replica_id, counts: counts }))
     }
 }
 
 impl PnCounterIncrement {
-    fn replica_id(&self) -> u64 {
+    pub fn replica_id(&self) -> u64 {
         self.replica_id
     }
 }
 
 #[cfg(any(test, quickcheck_generators))]
 impl Arbitrary for PnCounterIncrement {
-    fn arbitrary<G: Gen>(g: &mut G) -> PnCounterIncrement {
+    fn arbitrary<G>(g: &mut G) -> PnCounterIncrement where G: Gen {
         PnCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<PnCounterIncrement>+'static> {
+    fn shrink(&self) -> Box<Iterator<Item=PnCounterIncrement> + 'static> {
         let replica_id = self.replica_id();
-        let shrinks = self.amount.shrink().map(|amount| PnCounterIncrement { replica_id: replica_id, amount: amount }).collect::<Vec<_>>();
-        Box::new(shrinks.into_iter()) as Box<Shrinker<PnCounterIncrement>+'static>
+        Box::new(self.amount.shrink().map(move |amount| PnCounterIncrement { replica_id: replica_id, amount: amount }))
     }
 }
 

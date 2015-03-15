@@ -4,10 +4,12 @@ use std::collections::HashMap;
 use std::iter::AdditiveIterator;
 
 use Crdt;
+
+#[cfg(any(test, quickcheck_generators))]
 use test::gen_replica_id;
 
 #[cfg(any(test, quickcheck_generators))]
-use quickcheck::{Arbitrary, Gen, Shrinker};
+use quickcheck::{Arbitrary, Gen};
 
 /// A grow-only counter.
 ///
@@ -95,7 +97,7 @@ impl GCounter {
     }
 
     /// Get the replica ID of this counter.
-    fn replica_id(&self) -> u64 {
+    pub fn replica_id(&self) -> u64 {
         self.replica_id
     }
 }
@@ -200,31 +202,29 @@ impl PartialOrd for GCounter {
 
 #[cfg(any(test, quickcheck_generators))]
 impl Arbitrary for GCounter {
-    fn arbitrary<G: Gen>(g: &mut G) -> GCounter {
+    fn arbitrary<G>(g: &mut G) -> GCounter where G: Gen {
         GCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<GCounter>+'static> {
+    fn shrink(&self) -> Box<Iterator<Item=GCounter> + 'static> {
         let replica_id: u64 = self.replica_id();
-        let shrinks = self.counts.shrink().map(|counts| GCounter { replica_id: replica_id, counts: counts }).collect::<Vec<_>>();
-        Box::new(shrinks.into_iter()) as Box<Shrinker<GCounter>+'static>
+        Box::new(self.counts.shrink().map(move |counts| GCounter { replica_id: replica_id, counts: counts }))
     }
 }
 
 impl GCounterIncrement {
-    fn replica_id(&self) -> u64 {
+    pub fn replica_id(&self) -> u64 {
         self.replica_id
     }
 }
 
 #[cfg(any(test, quickcheck_generators))]
 impl Arbitrary for GCounterIncrement {
-    fn arbitrary<G: Gen>(g: &mut G) -> GCounterIncrement {
+    fn arbitrary<G>(g: &mut G) -> GCounterIncrement where G: Gen {
         GCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<GCounterIncrement>+'static> {
+    fn shrink(&self) -> Box<Iterator<Item=GCounterIncrement> + 'static> {
         let replica_id = self.replica_id();
-        let shrinks = self.amount.shrink().map(|amount| GCounterIncrement { replica_id: replica_id, amount: amount }).collect::<Vec<_>>();
-        Box::new(shrinks.into_iter()) as Box<Shrinker<GCounterIncrement>+'static>
+        Box::new(self.amount.shrink().map(move |amount| GCounterIncrement { replica_id: replica_id, amount: amount }))
     }
 }
 

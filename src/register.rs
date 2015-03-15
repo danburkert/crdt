@@ -1,7 +1,7 @@
 //! Register CRDTs.
 
 #[cfg(any(test, quickcheck_generators))]
-use quickcheck::{Arbitrary, Gen, Shrinker};
+use quickcheck::{Arbitrary, Gen};
 
 use std::cmp::Ordering;
 
@@ -157,15 +157,13 @@ impl <T> Ord for LwwRegister<T> {
 }
 
 #[cfg(any(test, quickcheck_generators))]
-impl <T : Arbitrary> Arbitrary for LwwRegister<T> {
+impl <T> Arbitrary for LwwRegister<T> where T: Arbitrary {
     fn arbitrary<G: Gen>(g: &mut G) -> LwwRegister<T> {
         LwwRegister { value: Arbitrary::arbitrary(g), transaction_id: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<LwwRegister<T>>+'static> {
+    fn shrink(&self) -> Box<Iterator<Item=LwwRegister<T>> + 'static> {
         let tuple = (self.value.clone(), self.transaction_id);
-        Box::new(tuple.shrink()
-                 .map(|(value, tid)| LwwRegister { value: value, transaction_id: tid }))
-            as Box<Shrinker<LwwRegister<T>>>
+        Box::new(tuple.shrink().map(|(value, tid)| LwwRegister { value: value, transaction_id: tid }))
     }
 }
 

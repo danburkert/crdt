@@ -5,7 +5,7 @@
 //! 1. [_A comprehensive study of Convergent and Commutative Replicated Data Types_](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) (Shapiro, et al.)
 //! 2. [_An Optimized Conflict-free Replicated Set_](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
 
-#![feature(core, plugin, std_misc)]
+#![feature(core, custom_attribute, plugin, std_misc)]
 #![cfg_attr(test, feature(collections))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 

@@ -5,12 +5,13 @@ use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
 
 #[cfg(any(test, quickcheck_generators))]
-use quickcheck::{Arbitrary, Gen, Shrinker};
+use quickcheck::{Arbitrary, Gen};
 
 use Crdt;
 
 /// A last-writer wins set.
-pub struct LwwSet<T> {
+#[derive(Clone)]
+pub struct LwwSet<T> where T: Hash {
     elements: HashMap<T, (bool, u64)>
 }
 
@@ -21,7 +22,7 @@ pub enum LwwSetOp<T> {
     Remove(T, u64),
 }
 
-impl <T : Hash + Eq + Clone> LwwSet<T> {
+impl <T> LwwSet<T> where T: Clone + Eq + Hash {
 
     /// Create a new last-writer wins set.
     ///
@@ -253,22 +254,13 @@ impl <T : Eq + Hash + Debug> Debug for LwwSet<T> {
      }
 }
 
-impl <T : Clone> Clone for LwwSet<T> {
-    fn clone(&self) -> LwwSet<T> {
-        LwwSet { elements: self.elements.clone() }
-    }
-}
-
 #[cfg(any(test, quickcheck_generators))]
 impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for LwwSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> LwwSet<T> {
-        let elements: Vec<(T, (bool, u64))> = Arbitrary::arbitrary(g);
-        LwwSet { elements: elements.into_iter().collect() }
+        LwwSet { elements: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<LwwSet<T>>+'static> {
-        let elements: Vec<(T, (bool, u64))> = self.elements.clone().into_iter().collect();
-        let sets: Vec<LwwSet<T>> = elements.shrink().map(|es| LwwSet { elements: es.into_iter().collect() }).collect();
-        Box::new(sets.into_iter()) as Box<Shrinker<LwwSet<T>>>
+    fn shrink(&self) -> Box<Iterator<Item=LwwSet<T>> + 'static> {
+        Box::new(self.elements.shrink().map(|es| LwwSet { elements: es }))
     }
 }
 
@@ -281,17 +273,13 @@ impl <T : Arbitrary> Arbitrary for LwwSetOp<T> {
             LwwSetOp::Insert(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
         }
     }
-    fn shrink(&self) -> Box<Shrinker<LwwSetOp<T>>+'static> {
-        match *self {
-            LwwSetOp::Insert(ref element, tid) => {
-                let mut inserts: Vec<LwwSetOp<T>> = element.shrink().map(|e| LwwSetOp::Insert(e, tid)).collect();
-                inserts.extend(tid.shrink().map(|t| LwwSetOp::Insert(element.clone(), t)));
-                Box::new(inserts.into_iter()) as Box<Shrinker<LwwSetOp<T>>>
+    fn shrink(&self) -> Box<Iterator<Item=LwwSetOp<T>> + 'static> {
+        match self.clone() {
+            LwwSetOp::Insert(element, tid) => {
+                Box::new((element, tid).shrink().map(|(e, t)| LwwSetOp::Insert(e, t)))
             }
-            LwwSetOp::Remove(ref element, tid) => {
-                let mut removes: Vec<LwwSetOp<T>> = element.shrink().map(|e| LwwSetOp::Remove(e, tid)).collect();
-                removes.extend(tid.shrink().map(|t| LwwSetOp::Remove(element.clone(), t)));
-                Box::new(removes.into_iter()) as Box<Shrinker<LwwSetOp<T>>>
+            LwwSetOp::Remove(element, tid) => {
+                Box::new((element, tid).shrink().map(|(e, t)| LwwSetOp::Remove(e, t)))
             }
         }
     }

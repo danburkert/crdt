@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 #[cfg(any(test, quickcheck_generators))]
-use quickcheck::{Arbitrary, Gen, Shrinker};
+use quickcheck::{Arbitrary, Gen};
 
 use Crdt;
 use counter::{PnCounter, PnCounterIncrement};
@@ -218,45 +218,42 @@ impl <T : Eq + Hash> PartialOrd for PnSet<T> {
 }
 
 #[cfg(any(test, quickcheck_generators))]
-impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for PnSet<T> {
-    fn arbitrary<G: Gen>(g: &mut G) -> PnSet<T> {
+impl <T> Arbitrary for PnSet<T> where T: Arbitrary + Clone + Eq + Hash {
+    fn arbitrary<G>(g: &mut G) -> PnSet<T> where G: Gen {
         let elements: Vec<(T, PnCounter)> = Arbitrary::arbitrary(g);
         PnSet {
             replica_id: Arbitrary::arbitrary(g),
             elements: elements.into_iter().collect(),
         }
     }
-    fn shrink(&self) -> Box<Shrinker<PnSet<T>>+'static> {
-        let elements: Vec<(T, PnCounter)> = self.elements.clone().into_iter().collect();
-        let mut shrinks: Vec<PnSet<T>> = elements.shrink().map(|es| {
-            PnSet {
-                replica_id: self.replica_id,
-                elements: es.into_iter().collect(),
-            }
-        }).collect();
-        shrinks.extend(self.replica_id.shrink().map(|id| {
-            PnSet {
-                replica_id: id,
-                elements: self.elements.clone()
-            }
-        }));
-        Box::new(shrinks.into_iter()) as Box<Shrinker<PnSet<T>>+'static>
+    fn shrink(&self) -> Box<Iterator<Item=PnSet<T>> + 'static> {
+        let replica_id: u64 = self.replica_id;
+        Box::new(
+            self.elements
+                .shrink()
+                .map(move |es| PnSet { replica_id: replica_id, elements: es }))
     }
 }
 
 #[cfg(any(test, quickcheck_generators))]
-impl <T : Arbitrary> Arbitrary for PnSetOp<T> {
-    fn arbitrary<G: Gen>(g: &mut G) -> PnSetOp<T> {
+impl <T> Arbitrary for PnSetOp<T> where T: Arbitrary {
+    fn arbitrary<G>(g: &mut G) -> PnSetOp<T> where G: Gen {
         PnSetOp {
             element: Arbitrary::arbitrary(g),
             counter_op: Arbitrary::arbitrary(g),
         }
     }
-    fn shrink(&self) -> Box<Shrinker<PnSetOp<T>>+'static> {
+    fn shrink(&self) -> Box<Iterator<Item=PnSetOp<T>> + 'static> {
         let element = self.element.clone();
-        let mut shrinks: Vec<PnSetOp<T>> = element.shrink().map(|elem| PnSetOp { element: elem, counter_op: self.counter_op }).collect();
-        shrinks.extend(self.counter_op.shrink().map(|op| PnSetOp { element: element.clone(), counter_op: op }));
-        Box::new(shrinks.into_iter()) as Box<Shrinker<PnSetOp<T>>+'static>
+        let counter_op = self.counter_op.clone();
+        Box::new(
+            self.element
+                .shrink()
+                .map(move |element| PnSetOp { element: element, counter_op: counter_op.clone() })
+                .chain(
+                    self.counter_op
+                        .shrink()
+                        .map(move |op| PnSetOp { element: element.clone(), counter_op: op })))
     }
 }
 

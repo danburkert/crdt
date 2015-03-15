@@ -5,13 +5,14 @@ use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
 
 #[cfg(any(test, quickcheck_generators))]
-use quickcheck::{Arbitrary, Gen, Shrinker};
+use quickcheck::{Arbitrary, Gen};
 
 use Crdt;
 
 /// A two-phase set.
-pub struct TpSet<T> {
-    elements: HashMap<T, bool>
+#[derive(Clone, PartialEq, Eq)]
+pub struct TpSet<T> where T: Eq + Hash {
+    elements: HashMap<T, bool>,
 }
 
 /// An insert or remove operation over `TpSet` CRDTs.
@@ -112,7 +113,7 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
     }
 }
 
-impl <T : Hash + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
+impl <T> Crdt<TpSetOp<T>> for TpSet<T> where T: Clone + Eq + Hash {
 
     /// Merge a replica into the set.
     ///
@@ -173,14 +174,6 @@ impl <T : Hash + Eq + Clone> Crdt<TpSetOp<T>> for TpSet<T> {
         }
     }
 }
-
-impl <T : Eq + Hash> PartialEq for TpSet<T> {
-    fn eq(&self, other: &TpSet<T>) -> bool {
-        self.elements == other.elements
-    }
-}
-
-impl <T : Eq + Hash> Eq for TpSet<T> {}
 
 impl <T : Eq + Hash> PartialOrd for TpSet<T> {
     fn partial_cmp(&self, other: &TpSet<T>) -> Option<Ordering> {
@@ -255,27 +248,18 @@ impl <T : Eq + Hash + Debug> Debug for TpSet<T> {
      }
 }
 
-impl <T : Clone> Clone for TpSet<T> {
-    fn clone(&self) -> TpSet<T> {
-        TpSet { elements: self.elements.clone() }
-    }
-}
-
 #[cfg(any(test, quickcheck_generators))]
 impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for TpSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> TpSet<T> {
-        let elements: Vec<(T, bool)> = Arbitrary::arbitrary(g);
-        TpSet { elements: elements.into_iter().collect() }
+        TpSet { elements: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Shrinker<TpSet<T>>+'static> {
-        let elements: Vec<(T, bool)> = self.elements.clone().into_iter().collect();
-        let sets: Vec<TpSet<T>> = elements.shrink().map(|es| TpSet { elements: es.into_iter().collect() }).collect();
-        Box::new(sets.into_iter()) as Box<Shrinker<TpSet<T>>>
+    fn shrink(&self) -> Box<Iterator<Item=TpSet<T>> + 'static> {
+        Box::new(self.elements.shrink().map(|elements| TpSet { elements: elements }))
     }
 }
 
 #[cfg(any(test, quickcheck_generators))]
-impl <T : Arbitrary> Arbitrary for TpSetOp<T> {
+impl <T> Arbitrary for TpSetOp<T> where T: Arbitrary {
     fn arbitrary<G: Gen>(g: &mut G) -> TpSetOp<T> {
         if Arbitrary::arbitrary(g) {
             TpSetOp::Insert(Arbitrary::arbitrary(g))
@@ -283,20 +267,17 @@ impl <T : Arbitrary> Arbitrary for TpSetOp<T> {
             TpSetOp::Insert(Arbitrary::arbitrary(g))
         }
     }
-    fn shrink(&self) -> Box<Shrinker<TpSetOp<T>>+'static> {
+    fn shrink(&self) -> Box<Iterator<Item=TpSetOp<T>> + 'static> {
         match *self {
             TpSetOp::Insert(ref element) => {
-                let inserts: Vec<TpSetOp<T>> = element.shrink().map(|e| TpSetOp::Insert(e)).collect();
-                Box::new(inserts.into_iter()) as Box<Shrinker<TpSetOp<T>>>
+                Box::new(element.shrink().map(|e| TpSetOp::Insert(e)))
             }
             TpSetOp::Remove(ref element) => {
-                let removes: Vec<TpSetOp<T>> = element.shrink().map(|e| TpSetOp::Remove(e)).collect();
-                Box::new(removes.into_iter()) as Box<Shrinker<TpSetOp<T>>>
+                Box::new(element.shrink().map(|e| TpSetOp::Remove(e)))
             }
         }
     }
 }
-
 
 #[cfg(test)]
 mod test {
