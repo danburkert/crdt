@@ -2,12 +2,12 @@ use std::cmp;
 use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 
-use Crdt;
+use {Crdt, ReplicaId};
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 use test::gen_replica_id;
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 use quickcheck::{Arbitrary, Gen};
 
 /// A grow-only counter.
@@ -15,14 +15,14 @@ use quickcheck::{Arbitrary, Gen};
 /// `GCounter` monotonically increases across increment operations.
 #[derive(Debug, Clone)]
 pub struct GCounter {
-    replica_id: u64,
-    counts: HashMap<u64, u64>
+    replica_id: ReplicaId,
+    counts: HashMap<ReplicaId, u64>
 }
 
 /// An increment operation over `GCounter` CRDTs.
 #[derive(Debug, Clone, Copy)]
 pub struct GCounterIncrement {
-    replica_id: u64,
+    replica_id: ReplicaId,
     amount: u64
 }
 
@@ -41,8 +41,9 @@ impl GCounter {
     /// let mut counter = GCounter::new(42);
     /// assert_eq!(0, counter.count());
     /// ```
-    pub fn new(replica_id: u64) -> GCounter {
-        GCounter { replica_id: replica_id, counts: HashMap::new() }
+    pub fn new<R>(replica_id: R) -> GCounter
+    where R: Into<ReplicaId> {
+        GCounter { replica_id: replica_id.into(), counts: HashMap::new() }
     }
 
     /// Get the current count of the counter.
@@ -96,7 +97,7 @@ impl GCounter {
     }
 
     /// Get the replica ID of this counter.
-    pub fn replica_id(&self) -> u64 {
+    pub fn replica_id(&self) -> ReplicaId {
         self.replica_id
     }
 }
@@ -201,24 +202,24 @@ impl PartialOrd for GCounter {
     }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl Arbitrary for GCounter {
     fn arbitrary<G>(g: &mut G) -> GCounter where G: Gen {
         GCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
     }
     fn shrink(&self) -> Box<Iterator<Item=GCounter> + 'static> {
-        let replica_id: u64 = self.replica_id();
+        let replica_id: ReplicaId = self.replica_id();
         Box::new(self.counts.shrink().map(move |counts| GCounter { replica_id: replica_id, counts: counts }))
     }
 }
 
 impl GCounterIncrement {
-    pub fn replica_id(&self) -> u64 {
+    pub fn replica_id(&self) -> ReplicaId {
         self.replica_id
     }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl Arbitrary for GCounterIncrement {
     fn arbitrary<G>(g: &mut G) -> GCounterIncrement where G: Gen {
         GCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
@@ -234,7 +235,7 @@ mod test {
 
     use quickcheck::{TestResult, quickcheck};
 
-    use {Crdt, test};
+    use {Crdt, ReplicaId, test};
     use counter::{GCounter, GCounterIncrement};
 
     type C = GCounter;
@@ -262,7 +263,7 @@ mod test {
 
     #[quickcheck]
     fn check_local_increment(increments: Vec<u32>) -> bool {
-        let mut counter = GCounter::new(0);
+        let mut counter = GCounter::new(ReplicaId(0));
         for &amount in increments.iter() {
             counter.increment(amount as u64);
         }

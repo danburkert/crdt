@@ -4,7 +4,7 @@ use std::collections::{HashMap};
 use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 use quickcheck::{Arbitrary, Gen};
 
 use Crdt;
@@ -250,7 +250,7 @@ impl <T : Eq + Hash + Debug> Debug for TpSet<T> {
      }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for TpSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> TpSet<T> {
         TpSet { elements: Arbitrary::arbitrary(g) }
@@ -260,7 +260,7 @@ impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for TpSet<T> {
     }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl <T> Arbitrary for TpSetOp<T> where T: Arbitrary {
     fn arbitrary<G: Gen>(g: &mut G) -> TpSetOp<T> {
         if Arbitrary::arbitrary(g) {

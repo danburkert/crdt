@@ -8,14 +8,14 @@
 #![cfg_attr(test, feature(collections, custom_attribute, plugin))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 extern crate quickcheck;
 
 pub mod counter;
 pub mod register;
 pub mod set;
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 pub mod test;
 
 /// A Conflict-free Replicated Data Type.
@@ -41,26 +41,6 @@ pub mod test;
 /// allow for either state-based or operation-based replication, or a mix of
 /// both.
 ///
-/// ###### Replica ID
-///
-/// Many CRDTs require a `u64` identifier, or replica ID, upon creation. The
-/// replica ID **must** be unique among replicas, so it should be taken from
-/// unique per-replica configuration, or from a source of strong coordination
-/// such as [ZooKeeper](http://zookeeper.apache.org/) or
-/// [etcd](https://github.com/coreos/etcd) (implementing a Rust client for these
-/// services is left as an exercise for the reader).
-///
-/// ###### Transaction IDs
-///
-/// Many CRDTs require the user to provide a transaction ID when performing
-/// mutating operations. Transaction IDs provided to an individual replica
-/// **must** be monotonically increasing across operations. Transaction IDs
-/// across replicas **must** be unique, and **should** be as close to globally
-/// monotonically increasing as possible. Unlike replicas IDs, these
-/// requirements do not require strong coordination among replicas. See
-/// [Snowflake](https://github.com/twitter/snowflake) for an example of
-/// distributed, uncoordinated ID generation which meets the requirements.
-///
 /// ###### Partial Ordering
 ///
 /// Replicas of a CRDT are partially-ordered over the set of possible
@@ -70,8 +50,8 @@ pub mod test;
 ///
 /// ###### Equality
 ///
-/// Equality among CRDT replicas does not take into account the replica ID;
-/// only the operation history is taken into account.
+/// Equality among CRDT replicas does not take into account the replica ID, if
+/// it exists. Only the operation history is taken into account.
 pub trait Crdt : Clone + Eq + PartialOrd {
 
     type Operation: Clone;
@@ -85,4 +65,70 @@ pub trait Crdt : Clone + Eq + PartialOrd {
     ///
     /// This method is used to perform operation-based replication.
     fn apply(&mut self, operation: Self::Operation);
+}
+
+/// The Id of an individual replica of a Crdt.
+///
+/// Some CRDTs require a `u64` replica ID upon creation. The replica ID **must**
+/// be unique among replicas, so it should be taken from unique per-replica
+/// configuration, or from a source of strong coordination such as
+/// [ZooKeeper](http://zookeeper.apache.org/) or [etcd](https://github.com/coreos/etcd).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ReplicaId(u64);
+
+impl ReplicaId {
+    pub fn id(self) -> u64 {
+        self.0
+    }
+}
+
+impl Into<ReplicaId> for u64 {
+    fn into(self) -> ReplicaId {
+        ReplicaId(self)
+    }
+}
+
+#[cfg(any(quickcheck, test))]
+impl quickcheck::Arbitrary for ReplicaId {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> ReplicaId {
+        ReplicaId(quickcheck::Arbitrary::arbitrary(g))
+    }
+    fn shrink(&self) -> Box<Iterator<Item=ReplicaId> + 'static> {
+        Box::new(self.id().shrink().map(|id| ReplicaId(id)))
+    }
+}
+
+/// The Id for an individual operation on a CRDT.
+///
+/// Some CRDTs require the user to provide a transaction ID when performing
+/// mutating operations. Transaction IDs provided to an individual replica
+/// **must** be monotonically increasing across operations. Transaction IDs
+/// across replicas **must** be unique, and **should** be as close to globally
+/// monotonically increasing as possible. Unlike replicas IDs, these
+/// requirements do not require strong coordination among replicas. See
+/// [Snowflake](https://github.com/twitter/snowflake) for an example of
+/// distributed, uncoordinated ID generation which meets the requirements.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct TransactionId(u64);
+
+impl TransactionId {
+    pub fn id(self) -> u64 {
+        self.0
+    }
+}
+
+impl Into<TransactionId> for u64 {
+    fn into(self) -> TransactionId {
+        TransactionId(self)
+    }
+}
+
+#[cfg(any(quickcheck, test))]
+impl quickcheck::Arbitrary for TransactionId {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> TransactionId {
+        TransactionId(quickcheck::Arbitrary::arbitrary(g))
+    }
+    fn shrink(&self) -> Box<Iterator<Item=TransactionId> + 'static> {
+        Box::new(self.id().shrink().map(|id| TransactionId(id)))
+    }
 }

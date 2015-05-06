@@ -4,19 +4,16 @@ use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::hash_map;
 use std::hash::Hash;
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(any(test, quickcheck_generators))]
-use test::gen_replica_id;
-
-use Crdt;
+use {Crdt, ReplicaId};
 use counter::{PnCounter, PnCounterIncrement};
 
 /// A counting add/remove set.
 #[derive(Clone, Debug)]
 pub struct PnSet<T> where T: Eq + Hash {
-    replica_id: u64,
+    replica_id: ReplicaId,
     elements: HashMap<T, PnCounter>
 }
 
@@ -39,8 +36,9 @@ impl <T> PnSet<T> where T: Clone + Eq + Hash {
     /// let mut set = PnSet::<i32>::new(0);
     /// assert!(set.is_empty());
     /// ```
-    pub fn new(replica_id: u64) -> PnSet<T> {
-        PnSet { replica_id: replica_id, elements: HashMap::new() }
+    pub fn new<R>(replica_id: R) -> PnSet<T>
+    where R: Into<ReplicaId> {
+        PnSet { replica_id: replica_id.into(), elements: HashMap::new() }
     }
 
     /// Insert an element into a counting add/remove set.
@@ -221,9 +219,10 @@ impl <T : Eq + Hash> PartialOrd for PnSet<T> {
     }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl <T> Arbitrary for PnSet<T> where T: Arbitrary + Clone + Eq + Hash {
     fn arbitrary<G>(g: &mut G) -> PnSet<T> where G: Gen {
+        use test::gen_replica_id;
         let elements: Vec<(T, PnCounter)> = Arbitrary::arbitrary(g);
         PnSet {
             replica_id: gen_replica_id(),
@@ -231,7 +230,7 @@ impl <T> Arbitrary for PnSet<T> where T: Arbitrary + Clone + Eq + Hash {
         }
     }
     fn shrink(&self) -> Box<Iterator<Item=PnSet<T>> + 'static> {
-        let replica_id: u64 = self.replica_id;
+        let replica_id: ReplicaId = self.replica_id;
         Box::new(
             self.elements
                 .shrink()
@@ -239,7 +238,7 @@ impl <T> Arbitrary for PnSet<T> where T: Arbitrary + Clone + Eq + Hash {
     }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl <T> Arbitrary for PnSetOp<T> where T: Arbitrary {
     fn arbitrary<G>(g: &mut G) -> PnSetOp<T> where G: Gen {
         PnSetOp {
@@ -287,7 +286,7 @@ mod test {
 
     use quickcheck::{TestResult, quickcheck};
 
-    use {test, Crdt};
+    use {Crdt, ReplicaId, test};
     use super::{PnSet, PnSetOp};
 
     type C = PnSet<u32>;
@@ -315,7 +314,7 @@ mod test {
 
     #[quickcheck]
     fn check_local_insert(elements: Vec<u8>) -> bool {
-        let mut set = PnSet::new(0);
+        let mut set = PnSet::new(ReplicaId(0));
         for element in elements.clone().into_iter() {
             set.insert(element);
         }

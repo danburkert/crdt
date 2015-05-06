@@ -4,25 +4,25 @@ use std::cmp;
 use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 
-use Crdt;
+use {Crdt, ReplicaId};
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 use test::gen_replica_id;
 
 /// A incrementable and decrementable counter.
 #[derive(Clone, Debug, Eq)]
 pub struct PnCounter {
-    replica_id: u64,
-    counts: HashMap<u64, (u64, u64)>,
+    replica_id: ReplicaId,
+    counts: HashMap<ReplicaId, (u64, u64)>,
 }
 
 /// An increment or decrement operation over `PnCounter` CRDTs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct PnCounterIncrement {
-    replica_id: u64,
+    replica_id: ReplicaId,
     amount: i64,
 }
 
@@ -41,8 +41,9 @@ impl PnCounter {
     /// let mut counter = PnCounter::new(42);
     /// assert_eq!(0, counter.count());
     /// ```
-    pub fn new(replica_id: u64) -> PnCounter {
-        PnCounter { replica_id: replica_id, counts: HashMap::new() }
+    pub fn new<R>(replica_id: R) -> PnCounter
+    where R: Into<ReplicaId> {
+        PnCounter { replica_id: replica_id.into(), counts: HashMap::new() }
     }
 
     /// Get the current count of the counter.
@@ -101,7 +102,7 @@ impl PnCounter {
     }
 
     /// Get the replica ID of this counter.
-    pub fn replica_id(&self) -> u64 {
+    pub fn replica_id(&self) -> ReplicaId {
         self.replica_id
     }
 }
@@ -213,7 +214,7 @@ impl PartialOrd for PnCounter {
     }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl Arbitrary for PnCounter {
     fn arbitrary<G>(g: &mut G) -> PnCounter where G: Gen {
         PnCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
@@ -225,12 +226,12 @@ impl Arbitrary for PnCounter {
 }
 
 impl PnCounterIncrement {
-    pub fn replica_id(&self) -> u64 {
+    pub fn replica_id(&self) -> ReplicaId {
         self.replica_id
     }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl Arbitrary for PnCounterIncrement {
     fn arbitrary<G>(g: &mut G) -> PnCounterIncrement where G: Gen {
         PnCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
@@ -246,7 +247,7 @@ mod test {
 
     use quickcheck::{TestResult, quickcheck};
 
-    use {test, Crdt};
+    use {Crdt, ReplicaId, test};
     use super::{PnCounter, PnCounterIncrement};
 
     type C = PnCounter;
@@ -274,7 +275,7 @@ mod test {
 
     #[quickcheck]
     fn check_local_increment(increments: Vec<i32>) -> bool {
-        let mut counter = PnCounter::new(0);
+        let mut counter = PnCounter::new(ReplicaId(0));
         for &amount in increments.iter() {
             counter.increment(amount as i64);
         }

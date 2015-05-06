@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 use quickcheck::{Arbitrary, Gen};
 
 use Crdt;
@@ -162,7 +162,7 @@ impl <T: Clone + Eq + Hash> Clone for GSet<T> {
     }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl <T> Arbitrary for GSet<T> where T: Arbitrary + Clone + Eq + Hash {
     fn arbitrary<G>(g: &mut G) -> GSet<T> where G: Gen {
         let elements: Vec<T> = Arbitrary::arbitrary(g);
@@ -174,7 +174,7 @@ impl <T> Arbitrary for GSet<T> where T: Arbitrary + Clone + Eq + Hash {
     }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl <T> Arbitrary for GSetInsert<T> where T: Arbitrary {
     fn arbitrary<G: Gen>(g: &mut G) -> GSetInsert<T> {
         GSetInsert { element: Arbitrary::arbitrary(g) }

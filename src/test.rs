@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT};
 
 use quickcheck::TestResult;
 
-use Crdt;
+use {Crdt, ReplicaId};
 
 static mut REPLICA_COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
 
@@ -15,8 +15,9 @@ static mut REPLICA_COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
 /// The replica ID is guaranteed to be unique within the processes. This
 /// function should **not** be used for generating replica IDs in a distributed
 /// system.
-pub fn gen_replica_id() -> u64 {
-    unsafe { REPLICA_COUNT.fetch_add(1, SeqCst) as u64 }
+pub fn gen_replica_id() -> ReplicaId {
+    let id = unsafe { REPLICA_COUNT.fetch_add(1, SeqCst) as u64 };
+    ReplicaId(id)
 }
 
 pub fn apply_is_commutative<C>(crdt: C, ops: Vec<C::Operation>) -> TestResult where C: Crdt {

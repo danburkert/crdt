@@ -1,15 +1,15 @@
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 use quickcheck::{Arbitrary, Gen};
 
 use std::cmp::Ordering;
 
-use Crdt;
+use {Crdt, TransactionId};
 
 /// A last-writer-wins register.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct LwwRegister<T> {
     value: T,
-    transaction_id: u64
+    transaction_id: TransactionId,
 }
 
 impl <T> LwwRegister<T> {
@@ -22,10 +22,11 @@ impl <T> LwwRegister<T> {
     /// ```
     /// use crdt::register::LwwRegister;
     ///
-    /// let mut register = LwwRegister::new("my-value", 0);
+    /// let mut register = LwwRegister::new("my-value", TransactionId(0));
     /// ```
-    pub fn new(value: T, transaction_id: u64) -> LwwRegister<T> {
-        LwwRegister { value: value, transaction_id: transaction_id }
+    pub fn new<I>(value: T, transaction_id: I) -> LwwRegister<T>
+    where I: Into<TransactionId> {
+        LwwRegister { value: value, transaction_id: transaction_id.into() }
     }
 
     /// Get the current value in the register.
@@ -49,31 +50,33 @@ impl <T> LwwRegister<T> {
     /// ```
     /// # use crdt::register::LwwRegister;
     /// let mut register = LwwRegister::new("my-value", 0);
-    /// assert_eq!(0, register.transaction_id());
+    /// assert_eq!(TransactionId(0), register.transaction_id());
     /// ```
-    pub fn transaction_id(&self) -> u64 {
+    pub fn transaction_id(&self) -> TransactionId {
         self.transaction_id
     }
 }
 
-impl <T : Clone> LwwRegister<T> {
+impl <T> LwwRegister<T> where T: Clone {
 
     /// Set the register to the provided value and transaction ID.
     ///
     /// Returns an operation that can be applied to other replicas if the set
-    /// succeeds (by having the latest transation ID).
+    /// succeeds (by having the latest transaction ID).
     ///
     /// ##### Example
     ///
     /// ```
     /// # use crdt::register::LwwRegister;
     /// let mut register = LwwRegister::new("my-value", 0);
-    /// assert_eq!(0, register.transaction_id());
+    /// assert_eq!(TransactionId(0), register.transaction_id());
     /// ```
-    pub fn set(&mut self, value: T, transaction_id: u64) -> Option<LwwRegister<T>> {
-        if self.transaction_id <= transaction_id {
+    pub fn set<I>(&mut self, value: T, transaction_id: I) -> Option<LwwRegister<T>>
+    where I: Into<TransactionId> {
+        let tid: TransactionId = transaction_id.into();
+        if self.transaction_id <= tid {
             self.value = value;
-            self.transaction_id = transaction_id;
+            self.transaction_id = tid;
             Some(self.clone())
         } else { None }
     }
@@ -148,7 +151,7 @@ impl <T> Ord for LwwRegister<T> {
     }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl <T> Arbitrary for LwwRegister<T> where T: Arbitrary {
     fn arbitrary<G: Gen>(g: &mut G) -> LwwRegister<T> {
         LwwRegister { value: Arbitrary::arbitrary(g), transaction_id: Arbitrary::arbitrary(g) }
@@ -203,7 +206,7 @@ mod test {
     fn check_ordering_lt(mut a: LwwRegister<String>, b: LwwRegister<String>) -> bool {
         a.merge(b.clone());
         let current_tid = a.transaction_id();
-        a.set("foo".to_string(), current_tid + 1);
+        a.set("foo".to_string(), current_tid.id() + 1);
         a > b && b < a
     }
 }

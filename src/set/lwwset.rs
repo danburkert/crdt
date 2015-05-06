@@ -4,7 +4,7 @@ use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 use quickcheck::{Arbitrary, Gen};
 
 use Crdt;
@@ -254,7 +254,7 @@ impl <T> Debug for LwwSet<T> where T: Debug + Eq + Hash {
      }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for LwwSet<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> LwwSet<T> {
         LwwSet { elements: Arbitrary::arbitrary(g) }
@@ -264,7 +264,7 @@ impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for LwwSet<T> {
     }
 }
 
-#[cfg(any(test, quickcheck_generators))]
+#[cfg(any(quickcheck, test))]
 impl <T : Arbitrary> Arbitrary for LwwSetOp<T> {
     fn arbitrary<G: Gen>(g: &mut G) -> LwwSetOp<T> {
         if Arbitrary::arbitrary(g) {
