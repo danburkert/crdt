@@ -33,7 +33,7 @@ impl <T> PnSet<T> where T: Clone + Eq + Hash {
     /// ```
     /// use crdt::set::PnSet;
     ///
-    /// let mut set = PnSet::<int>::new(0);
+    /// let mut set = PnSet::<i32>::new(0);
     /// assert!(set.is_empty());
     /// ```
     pub fn new(replica_id: u64) -> PnSet<T> {
@@ -129,7 +129,7 @@ impl <T> Crdt for PnSet<T> where T: Clone + Eq + Hash {
     /// let mut local = PnSet::new(0);
     /// let mut remote = PnSet::new(1);
     ///
-    /// local.insert(1i);
+    /// local.insert(1i32);
     /// remote.insert(1);
     /// remote.insert(2);
     /// remote.remove(1);
@@ -164,7 +164,7 @@ impl <T> Crdt for PnSet<T> where T: Clone + Eq + Hash {
     /// let mut local = PnSet::new(0);
     /// let mut remote = PnSet::new(1);
     ///
-    /// let op = remote.insert(13i);
+    /// let op = remote.insert(13i32);
     ///
     /// local.apply(op);
     /// assert!(local.contains(&13));

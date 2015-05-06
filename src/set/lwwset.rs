@@ -31,7 +31,7 @@ impl <T> LwwSet<T> where T: Clone + Eq + Hash {
     /// ```
     /// use crdt::set::LwwSet;
     ///
-    /// let mut set = LwwSet::<int>::new();
+    /// let mut set = LwwSet::<i32>::new();
     /// assert!(set.is_empty());
     /// ```
     pub fn new() -> LwwSet<T> {
@@ -146,7 +146,7 @@ impl <T> Crdt for LwwSet<T> where T: Clone + Eq + Hash {
     /// let mut local = LwwSet::new();
     /// let mut remote = LwwSet::new();
     ///
-    /// local.insert(1i, 0);
+    /// local.insert(1i32, 0);
     /// remote.insert(1, 1);
     /// remote.insert(2, 2);
     /// remote.remove(1, 3);
@@ -178,7 +178,7 @@ impl <T> Crdt for LwwSet<T> where T: Clone + Eq + Hash {
     /// let mut local = LwwSet::new();
     /// let mut remote = LwwSet::new();
     ///
-    /// let op = remote.insert(13i, 0).expect("LwwSet should be empty.");
+    /// let op = remote.insert(13i32, 0).expect("LwwSet should be empty.");
     ///
     /// local.apply(op);
     /// assert!(local.contains(&13));
@@ -314,16 +314,15 @@ mod test {
             reference.apply(operation);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(LwwSet::new(), |mut set, op| {
-                         set.apply(op.clone());
-                         set
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(LwwSet::new(), |mut set, op| {
+                             set.apply(op.clone());
+                             set
+                         })
                      })
-                 })
-                 .all(|set| set == reference)
-    }
+                     .all(|set| set == reference)
+        }
 
     #[quickcheck]
     fn check_merge_is_commutative(counters: Vec<LwwSet<u8>>) -> bool {
@@ -335,15 +334,14 @@ mod test {
             reference.merge(set);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(LwwSet::new(), |mut set, other| {
-                         set.merge(other.clone());
-                         set
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(LwwSet::new(), |mut set, other| {
+                             set.merge(other.clone());
+                             set
+                         })
                      })
-                 })
-                 .all(|set| set == reference)
+                     .all(|set| set == reference)
     }
 
     #[quickcheck]

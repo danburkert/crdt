@@ -196,15 +196,14 @@ mod test {
             reference.apply(increment);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(LwwRegister::new("".to_string(), 0), |mut counter, op| {
-                         counter.apply(op.clone());
-                         counter
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(LwwRegister::new("".to_string(), 0), |mut counter, op| {
+                             counter.apply(op.clone());
+                             counter
+                         })
                      })
-                 })
-                 .all(|counter| counter == reference)
+                     .all(|counter| counter == reference)
     }
 
     #[quickcheck]
@@ -217,15 +216,14 @@ mod test {
             reference.merge(counter);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(LwwRegister::new("".to_string(), 0), |mut counter, other| {
-                         counter.merge(other.clone());
-                         counter
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(LwwRegister::new("".to_string(), 0), |mut counter, other| {
+                             counter.merge(other.clone());
+                             counter
+                         })
                      })
-                 })
-                 .all(|counter| counter == reference)
+                     .all(|counter| counter == reference)
     }
 
     #[quickcheck]

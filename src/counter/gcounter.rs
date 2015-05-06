@@ -1,7 +1,6 @@
 use std::cmp;
 use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
-use std::iter::AdditiveIterator;
 
 use Crdt;
 
@@ -56,7 +55,7 @@ impl GCounter {
     /// assert_eq!(0, counter.count());
     /// ```
     pub fn count(&self) -> u64 {
-        self.counts.values().map(|&x| x).sum()
+        self.counts.values().map(|&x| x).fold(0, |a, b| a + b)
     }
 
     /// Increment the counter by `amount`.
@@ -235,8 +234,6 @@ mod test {
 
     use std::cmp::Ordering::Equal;
 
-    use std::iter::AdditiveIterator;
-
     use Crdt;
     use counter::{GCounter, GCounterIncrement};
 
@@ -246,7 +243,7 @@ mod test {
         for &amount in increments.iter() {
             counter.increment(amount as u64);
         }
-        increments.into_iter().sum() as u64 == counter.count()
+        increments.into_iter().fold(0, |a, b| a + b) as u64 == counter.count()
     }
 
     #[quickcheck]
@@ -259,15 +256,14 @@ mod test {
             reference.apply(increment);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(GCounter::new(0), |mut counter, &op| {
-                         counter.apply(op);
-                         counter
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(GCounter::new(0), |mut counter, &op| {
+                             counter.apply(op);
+                             counter
+                         })
                      })
-                 })
-                 .all(|counter| counter == reference)
+                     .all(|counter| counter == reference)
     }
 
     #[quickcheck]
@@ -280,15 +276,14 @@ mod test {
             reference.merge(counter);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(GCounter::new(0), |mut counter, other| {
-                         counter.merge(other.clone());
-                         counter
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(GCounter::new(0), |mut counter, other| {
+                             counter.merge(other.clone());
+                             counter
+                         })
                      })
-                 })
-                 .all(|counter| counter == reference)
+                     .all(|counter| counter == reference)
     }
 
     #[quickcheck]

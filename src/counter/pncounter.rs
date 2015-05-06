@@ -3,8 +3,6 @@
 use std::cmp;
 use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
-use std::iter::AdditiveIterator;
-use std::num::SignedInt;
 
 use Crdt;
 
@@ -57,7 +55,7 @@ impl PnCounter {
     /// assert_eq!(0, counter.count());
     /// ```
     pub fn count(&self) -> i64 {
-        self.counts.values().map(|&(p, n)| p as i64 - n as i64).sum()
+        self.counts.values().map(|&(p, n)| p as i64 - n as i64).fold(0, |a, b| a + b)
     }
 
     /// Increment the counter by `amount`. If `amount` is negative, then the
@@ -247,7 +245,6 @@ impl Arbitrary for PnCounterIncrement {
 mod test {
 
     use std::cmp::Ordering::Equal;
-    use std::iter::AdditiveIterator;
 
     use Crdt;
     use super::{PnCounter, PnCounterIncrement};
@@ -258,7 +255,7 @@ mod test {
         for &amount in increments.iter() {
             counter.increment(amount as i64);
         }
-        increments.into_iter().sum() as i64 == counter.count()
+        increments.into_iter().fold(0, |a, b| a + b) as i64 == counter.count()
     }
 
     #[quickcheck]
@@ -271,15 +268,14 @@ mod test {
             reference.apply(increment);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(PnCounter::new(0), |mut counter, &op| {
-                         counter.apply(op);
-                         counter
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(PnCounter::new(0), |mut counter, &op| {
+                             counter.apply(op);
+                             counter
+                         })
                      })
-                 })
-                 .all(|counter| counter == reference)
+                     .all(|counter| counter == reference)
     }
 
     #[quickcheck]
@@ -292,15 +288,14 @@ mod test {
             reference.merge(counter);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(PnCounter::new(0), |mut counter, other| {
-                         counter.merge(other.clone());
-                         counter
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(PnCounter::new(0), |mut counter, other| {
+                             counter.merge(other.clone());
+                             counter
+                         })
                      })
-                 })
-                 .all(|counter| counter == reference)
+                     .all(|counter| counter == reference)
     }
 
     #[quickcheck]

@@ -28,7 +28,7 @@ impl <T: Hash + Eq + Clone> GSet<T> {
     /// ```
     /// use crdt::set::GSet;
     ///
-    /// let mut set = GSet::<int>::new();
+    /// let mut set = GSet::<i32>::new();
     /// assert!(set.is_empty());
     /// ```
     pub fn new() -> GSet<T> {
@@ -93,7 +93,7 @@ impl <T> Crdt for GSet<T> where T: Clone + Eq + Hash {
     /// let mut local = GSet::new();
     /// let mut remote = GSet::new();
     ///
-    /// local.insert(1i);
+    /// local.insert(1i32);
     /// remote.insert(2);
     ///
     /// local.merge(remote);
@@ -117,7 +117,7 @@ impl <T> Crdt for GSet<T> where T: Clone + Eq + Hash {
     /// let mut local = GSet::new();
     /// let mut remote = GSet::new();
     ///
-    /// let op = remote.insert(13i).expect("GSet should be empty.");
+    /// let op = remote.insert(13i32).expect("GSet should be empty.");
     ///
     /// local.apply(op);
     /// assert!(local.contains(&13));
@@ -211,15 +211,14 @@ mod test {
             reference.apply(insert);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(GSet::new(), |mut set, op| {
-                         set.apply(op.clone());
-                         set
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(GSet::new(), |mut set, op| {
+                             set.apply(op.clone());
+                             set
+                         })
                      })
-                 })
-                 .all(|set| set == reference)
+                     .all(|set| set == reference)
     }
 
     #[quickcheck]
@@ -232,15 +231,14 @@ mod test {
             reference.merge(set);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(GSet::new(), |mut set, other| {
-                         set.merge(other.clone());
-                         set
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(GSet::new(), |mut set, other| {
+                             set.merge(other.clone());
+                             set
+                         })
                      })
-                 })
-                 .all(|set| set == reference)
+                     .all(|set| set == reference)
     }
 
     #[quickcheck]

@@ -31,7 +31,7 @@ impl <T : Hash + Eq + Clone> TpSet<T> {
     /// ```
     /// use crdt::set::TpSet;
     ///
-    /// let mut set = TpSet::<int>::new();
+    /// let mut set = TpSet::<i32>::new();
     /// assert!(set.is_empty());
     /// ```
     pub fn new() -> TpSet<T> {
@@ -130,7 +130,7 @@ impl <T> Crdt for TpSet<T> where T: Clone + Eq + Hash {
     /// let mut local = TpSet::new();
     /// let mut remote = TpSet::new();
     ///
-    /// local.insert(1i);
+    /// local.insert(1i32);
     /// remote.insert(1);
     /// remote.insert(2);
     /// remote.remove(1);
@@ -164,7 +164,7 @@ impl <T> Crdt for TpSet<T> where T: Clone + Eq + Hash {
     /// let mut local = TpSet::new();
     /// let mut remote = TpSet::new();
     ///
-    /// let op = remote.insert(13i).expect("TpSet should be empty.");
+    /// let op = remote.insert(13i32).expect("TpSet should be empty.");
     ///
     /// local.apply(op);
     /// assert!(local.contains(&13));
@@ -309,15 +309,14 @@ mod test {
             reference.apply(operation);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(TpSet::new(), |mut set, op| {
-                         set.apply(op.clone());
-                         set
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(TpSet::new(), |mut set, op| {
+                             set.apply(op.clone());
+                             set
+                         })
                      })
-                 })
-                 .all(|set| set == reference)
+                     .all(|set| set == reference)
     }
 
     #[quickcheck]
@@ -330,15 +329,14 @@ mod test {
             reference.merge(set);
         }
 
-        truncated.as_slice()
-                 .permutations()
-                 .map(|permutation| {
-                     permutation.iter().fold(TpSet::new(), |mut set, other| {
-                         set.merge(other.clone());
-                         set
+        truncated[..].permutations()
+                     .map(|permutation| {
+                         permutation.iter().fold(TpSet::new(), |mut set, other| {
+                             set.merge(other.clone());
+                             set
+                         })
                      })
-                 })
-                 .all(|set| set == reference)
+                     .all(|set| set == reference)
     }
 
     #[quickcheck]
