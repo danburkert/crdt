@@ -12,11 +12,7 @@ keywords = ["library", "distributed", "crdt"]
 
 [features]
 
-default = []
-
-# If enabled, implementations for the quickcheck generator
-# traits are provided for the CRDTs.
-quickcheck_generators = ["quickcheck"]
+default = ["quickcheck"]
 
 [dependencies.quickcheck]
   version = "*"

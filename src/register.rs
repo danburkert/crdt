@@ -16,7 +16,7 @@ use Crdt;
 /// `LwwRegister` keeps the value written with the largest transaction ID.
 /// In order to prevent (or limit the period of) lost-writes, transaction
 /// IDs **must** be unique and **should** be globally monotonically increasing.
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct LwwRegister<T> {
     value: T,
     transaction_id: u64
@@ -172,13 +172,36 @@ impl <T> Arbitrary for LwwRegister<T> where T: Arbitrary {
 #[cfg(test)]
 mod test {
 
-    use std::cmp::Ordering::Equal;
+    use quickcheck::{TestResult, quickcheck};
 
-    use Crdt;
+    use {test, Crdt};
     use register::LwwRegister;
 
+    type C = LwwRegister<u32>;
+    type O = LwwRegister<u32>;
+
+    #[test]
+    fn check_apply_is_commutative() {
+        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> TestResult);
+    }
+
+    #[test]
+    fn check_merge_is_commutative() {
+        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> TestResult);
+    }
+
+    #[test]
+    fn check_ordering_lte() {
+        quickcheck(test::ordering_lte::<C> as fn(C, C) -> bool);
+    }
+
+    #[test]
+    fn check_ordering_equality() {
+        quickcheck(test::ordering_equality::<C> as fn(C, C) -> bool);
+    }
+
     #[quickcheck]
-    fn lwwregister_local_increment(versions: Vec<String>) -> bool {
+    fn check_local_increment(versions: Vec<String>) -> bool {
         let mut register = LwwRegister::new("".to_string(), 0);
         for (transaction_id, value) in versions.iter().enumerate() {
             register.set(value.clone(), transaction_id as u64);
@@ -187,66 +210,10 @@ mod test {
     }
 
     #[quickcheck]
-    fn lwwregister_apply_is_commutative(mutations: Vec<LwwRegister<String>>) -> bool {
-        // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<LwwRegister<String>> = mutations.into_iter().take(6).collect();
-
-        let mut reference = LwwRegister::new("".to_string(), 0);
-        for increment in truncated.clone().into_iter() {
-            reference.apply(increment);
-        }
-
-        truncated[..].permutations()
-                     .map(|permutation| {
-                         permutation.iter().fold(LwwRegister::new("".to_string(), 0), |mut counter, op| {
-                             counter.apply(op.clone());
-                             counter
-                         })
-                     })
-                     .all(|counter| counter == reference)
-    }
-
-    #[quickcheck]
-    fn lwwregister_merge_is_commutative(counters: Vec<LwwRegister<String>>) -> bool {
-        // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<LwwRegister<String>> = counters.into_iter().take(5).collect();
-
-        let mut reference = LwwRegister::new("".to_string(), 0);
-        for counter in truncated.clone().into_iter() {
-            reference.merge(counter);
-        }
-
-        truncated[..].permutations()
-                     .map(|permutation| {
-                         permutation.iter().fold(LwwRegister::new("".to_string(), 0), |mut counter, other| {
-                             counter.merge(other.clone());
-                             counter
-                         })
-                     })
-                     .all(|counter| counter == reference)
-    }
-
-    #[quickcheck]
-    fn lwwregister_ordering_lte(mut a: LwwRegister<String>, b: LwwRegister<String>) -> bool {
-        a.merge(b.clone());
-        a >= b && b <= a
-    }
-
-    #[quickcheck]
-    fn lwwregister_ordering_lt(mut a: LwwRegister<String>, b: LwwRegister<String>) -> bool {
+    fn check_ordering_lt(mut a: LwwRegister<String>, b: LwwRegister<String>) -> bool {
         a.merge(b.clone());
         let current_tid = a.transaction_id();
         a.set("foo".to_string(), current_tid + 1);
         a > b && b < a
-    }
-
-    #[quickcheck]
-    fn lwwregister_ordering_equality(mut a: LwwRegister<String>, mut b: LwwRegister<String>) -> bool {
-        a.merge(b.clone());
-        b.merge(a.clone());
-        a == b
-            && b == a
-            && a.partial_cmp(&b) == Some(Equal)
-            && b.partial_cmp(&a) == Some(Equal)
     }
 }

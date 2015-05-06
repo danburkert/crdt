@@ -244,10 +244,33 @@ impl Arbitrary for PnCounterIncrement {
 #[cfg(test)]
 mod test {
 
-    use std::cmp::Ordering::Equal;
+    use quickcheck::{TestResult, quickcheck};
 
-    use Crdt;
+    use {test, Crdt};
     use super::{PnCounter, PnCounterIncrement};
+
+    type C = PnCounter;
+    type O = PnCounterIncrement;
+
+    #[test]
+    fn check_apply_is_commutative() {
+        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> TestResult);
+    }
+
+    #[test]
+    fn check_merge_is_commutative() {
+        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> TestResult);
+    }
+
+    #[test]
+    fn check_ordering_lte() {
+        quickcheck(test::ordering_lte::<C> as fn(C, C) -> bool);
+    }
+
+    #[test]
+    fn check_ordering_equality() {
+        quickcheck(test::ordering_equality::<C> as fn(C, C) -> bool);
+    }
 
     #[quickcheck]
     fn check_local_increment(increments: Vec<i32>) -> bool {
@@ -259,67 +282,12 @@ mod test {
     }
 
     #[quickcheck]
-    fn check_apply_is_commutative(increments: Vec<PnCounterIncrement>) -> bool {
-        // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<PnCounterIncrement> = increments.into_iter().take(5).collect();
-
-        let mut reference = PnCounter::new(0);
-        for increment in truncated.clone().into_iter() {
-            reference.apply(increment);
-        }
-
-        truncated[..].permutations()
-                     .map(|permutation| {
-                         permutation.iter().fold(PnCounter::new(0), |mut counter, &op| {
-                             counter.apply(op);
-                             counter
-                         })
-                     })
-                     .all(|counter| counter == reference)
-    }
-
-    #[quickcheck]
-    fn check_merge_is_commutative(counters: Vec<PnCounter>) -> bool {
-        // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<PnCounter> = counters.into_iter().take(5).collect();
-
-        let mut reference = PnCounter::new(0);
-        for counter in truncated.clone().into_iter() {
-            reference.merge(counter);
-        }
-
-        truncated[..].permutations()
-                     .map(|permutation| {
-                         permutation.iter().fold(PnCounter::new(0), |mut counter, other| {
-                             counter.merge(other.clone());
-                             counter
-                         })
-                     })
-                     .all(|counter| counter == reference)
-    }
-
-    #[quickcheck]
-    fn check_ordering_lte(mut a: PnCounter, b: PnCounter) -> bool {
-        a.merge(b.clone());
-        a >= b && b <= a
-    }
-
-    #[quickcheck]
     fn check_ordering_lt(mut a: PnCounter, b: PnCounter) -> bool {
         a.merge(b.clone());
         a.increment(-1);
         a > b && b < a
     }
 
-    #[quickcheck]
-    fn check_ordering_equality(mut a: PnCounter, mut b: PnCounter) -> bool {
-        a.merge(b.clone());
-        b.merge(a.clone());
-        a == b
-            && b == a
-            && a.partial_cmp(&b) == Some(Equal)
-            && b.partial_cmp(&a) == Some(Equal)
-    }
 
     #[quickcheck]
     fn check_ordering_none(mut a: PnCounter, mut b: PnCounter) -> bool {

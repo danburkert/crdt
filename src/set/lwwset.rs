@@ -10,8 +10,8 @@ use quickcheck::{Arbitrary, Gen};
 use Crdt;
 
 /// A last-writer wins set.
-#[derive(Clone, Eq)]
-pub struct LwwSet<T> where T: Hash {
+#[derive(Clone, Default, Eq)]
+pub struct LwwSet<T> where T: Eq + Hash {
     elements: HashMap<T, (bool, u64)>
 }
 
@@ -288,11 +288,35 @@ impl <T : Arbitrary> Arbitrary for LwwSetOp<T> {
 #[cfg(test)]
 mod test {
 
-    use std::cmp::Ordering::Equal;
     use std::u64;
 
-    use Crdt;
+    use quickcheck::{TestResult, quickcheck};
+
+    use {test, Crdt};
     use super::{LwwSet, LwwSetOp};
+
+    type C = LwwSet<u32>;
+    type O = LwwSetOp<u32>;
+
+    #[test]
+    fn check_apply_is_commutative() {
+        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> TestResult);
+    }
+
+    #[test]
+    fn check_merge_is_commutative() {
+        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> TestResult);
+    }
+
+    #[test]
+    fn check_ordering_lte() {
+        quickcheck(test::ordering_lte::<C> as fn(C, C) -> bool);
+    }
+
+    #[test]
+    fn check_ordering_equality() {
+        quickcheck(test::ordering_equality::<C> as fn(C, C) -> bool);
+    }
 
     #[quickcheck]
     fn check_local_insert(elements: Vec<u8>) -> bool {
@@ -305,65 +329,9 @@ mod test {
     }
 
     #[quickcheck]
-    fn check_apply_is_commutative(operations: Vec<LwwSetOp<u8>>) -> bool {
-        // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<LwwSetOp<u8>> = operations.into_iter().take(5).collect();
-
-        let mut reference = LwwSet::new();
-        for operation in truncated.clone().into_iter() {
-            reference.apply(operation);
-        }
-
-        truncated[..].permutations()
-                     .map(|permutation| {
-                         permutation.iter().fold(LwwSet::new(), |mut set, op| {
-                             set.apply(op.clone());
-                             set
-                         })
-                     })
-                     .all(|set| set == reference)
-        }
-
-    #[quickcheck]
-    fn check_merge_is_commutative(counters: Vec<LwwSet<u8>>) -> bool {
-        // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<LwwSet<u8>> = counters.into_iter().take(4).collect();
-
-        let mut reference = LwwSet::new();
-        for set in truncated.clone().into_iter() {
-            reference.merge(set);
-        }
-
-        truncated[..].permutations()
-                     .map(|permutation| {
-                         permutation.iter().fold(LwwSet::new(), |mut set, other| {
-                             set.merge(other.clone());
-                             set
-                         })
-                     })
-                     .all(|set| set == reference)
-    }
-
-    #[quickcheck]
-    fn check_ordering_lte(mut a: LwwSet<u8>, b: LwwSet<u8>) -> bool {
-        a.merge(b.clone());
-        a >= b && b <= a
-    }
-
-    #[quickcheck]
     fn check_ordering_lt(mut a: LwwSet<u8>, b: LwwSet<u8>) -> bool {
         a.merge(b.clone());
         a.insert(0, u64::MAX);
         a > b && b < a
-    }
-
-    #[quickcheck]
-    fn check_ordering_equality(mut a: LwwSet<u8>, mut b: LwwSet<u8>) -> bool {
-        a.merge(b.clone());
-        b.merge(a.clone());
-        a == b
-            && b == a
-            && a.partial_cmp(&b) == Some(Equal)
-            && b.partial_cmp(&a) == Some(Equal)
     }
 }

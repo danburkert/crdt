@@ -7,12 +7,15 @@ use std::hash::Hash;
 #[cfg(any(test, quickcheck_generators))]
 use quickcheck::{Arbitrary, Gen};
 
+#[cfg(any(test, quickcheck_generators))]
+use test::gen_replica_id;
+
 use Crdt;
 use counter::{PnCounter, PnCounterIncrement};
 
 /// A counting add/remove set.
-#[derive(Clone)]
-pub struct PnSet<T> {
+#[derive(Clone, Debug)]
+pub struct PnSet<T> where T: Eq + Hash {
     replica_id: u64,
     elements: HashMap<T, PnCounter>
 }
@@ -223,7 +226,7 @@ impl <T> Arbitrary for PnSet<T> where T: Arbitrary + Clone + Eq + Hash {
     fn arbitrary<G>(g: &mut G) -> PnSet<T> where G: Gen {
         let elements: Vec<(T, PnCounter)> = Arbitrary::arbitrary(g);
         PnSet {
-            replica_id: Arbitrary::arbitrary(g),
+            replica_id: gen_replica_id(),
             elements: elements.into_iter().collect(),
         }
     }
@@ -276,5 +279,54 @@ impl<'a, T> Iterator for Iter<'a, T> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.inner.size_hint()
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use quickcheck::{TestResult, quickcheck};
+
+    use {test, Crdt};
+    use super::{PnSet, PnSetOp};
+
+    type C = PnSet<u32>;
+    type O = PnSetOp<u32>;
+
+    #[test]
+    fn check_apply_is_commutative() {
+        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> TestResult);
+    }
+
+    #[test]
+    fn check_merge_is_commutative() {
+        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> TestResult);
+    }
+
+    #[test]
+    fn check_ordering_lte() {
+        quickcheck(test::ordering_lte::<C> as fn(C, C) -> bool);
+    }
+
+    #[test]
+    fn check_ordering_equality() {
+        quickcheck(test::ordering_equality::<C> as fn(C, C) -> bool);
+    }
+
+    #[quickcheck]
+    fn check_local_insert(elements: Vec<u8>) -> bool {
+        let mut set = PnSet::new(0);
+        for element in elements.clone().into_iter() {
+            set.insert(element);
+        }
+
+        elements.iter().all(|element| set.contains(element))
+    }
+
+    #[quickcheck]
+    fn check_ordering_lt(mut a: PnSet<u8>, b: PnSet<u8>) -> bool {
+        a.merge(b.clone());
+        a.insert(0);
+        a > b && b < a
     }
 }

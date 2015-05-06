@@ -10,7 +10,7 @@ use quickcheck::{Arbitrary, Gen};
 use Crdt;
 
 /// A two-phase set.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct TpSet<T> where T: Eq + Hash {
     elements: HashMap<T, bool>,
 }
@@ -284,10 +284,33 @@ impl <T> Arbitrary for TpSetOp<T> where T: Arbitrary {
 #[cfg(test)]
 mod test {
 
-    use std::cmp::Ordering::Equal;
+    use quickcheck::{TestResult, quickcheck};
 
-    use Crdt;
+    use {test, Crdt};
     use super::{TpSet, TpSetOp};
+
+    type C = TpSet<u32>;
+    type O = TpSetOp<u32>;
+
+    #[test]
+    fn check_apply_is_commutative() {
+        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> TestResult);
+    }
+
+    #[test]
+    fn check_merge_is_commutative() {
+        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> TestResult);
+    }
+
+    #[test]
+    fn check_ordering_lte() {
+        quickcheck(test::ordering_lte::<C> as fn(C, C) -> bool);
+    }
+
+    #[test]
+    fn check_ordering_equality() {
+        quickcheck(test::ordering_equality::<C> as fn(C, C) -> bool);
+    }
 
     #[quickcheck]
     fn check_local_insert(elements: Vec<u8>) -> bool {
@@ -300,52 +323,6 @@ mod test {
     }
 
     #[quickcheck]
-    fn check_apply_is_commutative(operations: Vec<TpSetOp<u8>>) -> bool {
-        // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<TpSetOp<u8>> = operations.into_iter().take(5).collect();
-
-        let mut reference = TpSet::new();
-        for operation in truncated.clone().into_iter() {
-            reference.apply(operation);
-        }
-
-        truncated[..].permutations()
-                     .map(|permutation| {
-                         permutation.iter().fold(TpSet::new(), |mut set, op| {
-                             set.apply(op.clone());
-                             set
-                         })
-                     })
-                     .all(|set| set == reference)
-    }
-
-    #[quickcheck]
-    fn check_merge_is_commutative(counters: Vec<TpSet<u8>>) -> bool {
-        // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<TpSet<u8>> = counters.into_iter().take(4).collect();
-
-        let mut reference = TpSet::new();
-        for set in truncated.clone().into_iter() {
-            reference.merge(set);
-        }
-
-        truncated[..].permutations()
-                     .map(|permutation| {
-                         permutation.iter().fold(TpSet::new(), |mut set, other| {
-                             set.merge(other.clone());
-                             set
-                         })
-                     })
-                     .all(|set| set == reference)
-    }
-
-    #[quickcheck]
-    fn check_ordering_lte(mut a: TpSet<u8>, b: TpSet<u8>) -> bool {
-        a.merge(b.clone());
-        a >= b && b <= a
-    }
-
-    #[quickcheck]
     fn check_ordering_lt(mut a: TpSet<u8>, b: TpSet<u8>) -> bool {
         a.merge(b.clone());
         let mut i = 0;
@@ -355,15 +332,5 @@ mod test {
             i += 1;
         }
         a > b && b < a
-    }
-
-    #[quickcheck]
-    fn check_ordering_equality(mut a: TpSet<u8>, mut b: TpSet<u8>) -> bool {
-        a.merge(b.clone());
-        b.merge(a.clone());
-        a == b
-            && b == a
-            && a.partial_cmp(&b) == Some(Equal)
-            && b.partial_cmp(&a) == Some(Equal)
     }
 }

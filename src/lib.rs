@@ -14,6 +14,8 @@ extern crate quickcheck;
 pub mod counter;
 pub mod register;
 pub mod set;
+
+#[cfg(any(test, quickcheck_generators))]
 pub mod test;
 
 /// A Conflict-free Replicated Data Type.
@@ -72,7 +74,7 @@ pub mod test;
 /// only the operation history is taken into account.
 pub trait Crdt : Clone + Eq + PartialOrd {
 
-    type Operation;
+    type Operation: Clone;
 
     /// Merge a replica into this CRDT.
     ///

@@ -9,7 +9,8 @@ use quickcheck::{Arbitrary, Gen};
 use Crdt;
 
 /// A grow-only set.
-pub struct GSet<T> {
+#[derive(Default)]
+pub struct GSet<T> where T: Eq + Hash {
     elements: HashSet<T>
 }
 
@@ -127,15 +128,15 @@ impl <T> Crdt for GSet<T> where T: Clone + Eq + Hash {
     }
 }
 
-impl <T : Eq + Hash> PartialEq for GSet<T> {
+impl <T: Eq + Hash> PartialEq for GSet<T> {
     fn eq(&self, other: &GSet<T>) -> bool {
         self.elements == other.elements
     }
 }
 
-impl <T : Eq + Hash> Eq for GSet<T> {}
+impl <T: Eq + Hash> Eq for GSet<T> {}
 
-impl <T : Eq + Hash> PartialOrd for GSet<T> {
+impl <T: Eq + Hash> PartialOrd for GSet<T> {
     fn partial_cmp(&self, other: &GSet<T>) -> Option<Ordering> {
         if self.elements == other.elements {
             Some(Equal)
@@ -155,7 +156,7 @@ impl <T : Eq + Hash + Debug> Debug for GSet<T> {
      }
 }
 
-impl <T : Clone> Clone for GSet<T> {
+impl <T: Clone + Eq + Hash> Clone for GSet<T> {
     fn clone(&self) -> GSet<T> {
         GSet { elements: self.elements.clone() }
     }
@@ -186,10 +187,33 @@ impl <T> Arbitrary for GSetInsert<T> where T: Arbitrary {
 #[cfg(test)]
 mod test {
 
-    use std::cmp::Ordering::Equal;
+    use quickcheck::{TestResult, quickcheck};
 
-    use Crdt;
+    use {Crdt, test};
     use super::{GSet, GSetInsert};
+
+    type C = GSet<u32>;
+    type O = GSetInsert<u32>;
+
+    #[test]
+    fn check_apply_is_commutative() {
+        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> TestResult);
+    }
+
+    #[test]
+    fn check_merge_is_commutative() {
+        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> TestResult);
+    }
+
+    #[test]
+    fn check_ordering_lte() {
+        quickcheck(test::ordering_lte::<C> as fn(C, C) -> bool);
+    }
+
+    #[test]
+    fn check_ordering_equality() {
+        quickcheck(test::ordering_equality::<C> as fn(C, C) -> bool);
+    }
 
     #[quickcheck]
     fn check_local_insert(elements: Vec<u8>) -> bool {
@@ -199,52 +223,6 @@ mod test {
         }
 
         elements.iter().all(|element| set.contains(element))
-    }
-
-    #[quickcheck]
-    fn check_apply_is_commutative(inserts: Vec<GSetInsert<u8>>) -> bool {
-        // This test takes too long with too many operations, so we truncate
-        let truncated: Vec<GSetInsert<u8>> = inserts.into_iter().take(5).collect();
-
-        let mut reference = GSet::new();
-        for insert in truncated.clone().into_iter() {
-            reference.apply(insert);
-        }
-
-        truncated[..].permutations()
-                     .map(|permutation| {
-                         permutation.iter().fold(GSet::new(), |mut set, op| {
-                             set.apply(op.clone());
-                             set
-                         })
-                     })
-                     .all(|set| set == reference)
-    }
-
-    #[quickcheck]
-    fn check_merge_is_commutative(counters: Vec<GSet<u8>>) -> bool {
-        // This test takes too long with too many counters, so we truncate
-        let truncated: Vec<GSet<u8>> = counters.into_iter().take(4).collect();
-
-        let mut reference = GSet::new();
-        for set in truncated.clone().into_iter() {
-            reference.merge(set);
-        }
-
-        truncated[..].permutations()
-                     .map(|permutation| {
-                         permutation.iter().fold(GSet::new(), |mut set, other| {
-                             set.merge(other.clone());
-                             set
-                         })
-                     })
-                     .all(|set| set == reference)
-    }
-
-    #[quickcheck]
-    fn check_ordering_lte(mut a: GSet<u8>, b: GSet<u8>) -> bool {
-        a.merge(b.clone());
-        a >= b && b <= a
     }
 
     #[quickcheck]
@@ -258,15 +236,5 @@ mod test {
             i += 1;
         }
         a > b && b < a
-    }
-
-    #[quickcheck]
-    fn check_ordering_equality(mut a: GSet<u8>, mut b: GSet<u8>) -> bool {
-        a.merge(b.clone());
-        b.merge(a.clone());
-        a == b
-            && b == a
-            && a.partial_cmp(&b) == Some(Equal)
-            && b.partial_cmp(&a) == Some(Equal)
     }
 }
