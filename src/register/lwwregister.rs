@@ -1,5 +1,3 @@
-//! Register CRDTs.
-
 #[cfg(any(test, quickcheck_generators))]
 use quickcheck::{Arbitrary, Gen};
 
@@ -8,14 +6,6 @@ use std::cmp::Ordering;
 use Crdt;
 
 /// A last-writer-wins register.
-///
-/// `LwwRegister` does not have a separate operation type for operation-based
-/// replication. Instead, operation-based replication uses the full state of the
-/// register.
-///
-/// `LwwRegister` keeps the value written with the largest transaction ID.
-/// In order to prevent (or limit the period of) lost-writes, transaction
-/// IDs **must** be unique and **should** be globally monotonically increasing.
 #[derive(Debug, Default, Clone)]
 pub struct LwwRegister<T> {
     value: T,
@@ -116,7 +106,7 @@ impl <T> Crdt for LwwRegister<T> where T: Clone {
         }
     }
 
-    /// Apply a set operation to this counter.
+    /// Apply a set operation to this register.
     ///
     /// This method is used to perform operation-based replication.
     ///
