@@ -1,6 +1,5 @@
 use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashSet;
-use std::fmt::{Debug, Formatter, Error};
 use std::hash::Hash;
 
 #[cfg(any(quickcheck, test))]
@@ -9,7 +8,7 @@ use quickcheck::{Arbitrary, Gen};
 use Crdt;
 
 /// A grow-only set.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct GSet<T> where T: Eq + Hash {
     elements: HashSet<T>
 }
@@ -20,7 +19,7 @@ pub struct GSetOp<T> {
     element: T
 }
 
-impl <T: Hash + Eq + Clone> GSet<T> {
+impl <T> GSet<T> where T: Clone + Eq + Hash {
 
     /// Create a new grow-only set.
     ///
@@ -66,7 +65,7 @@ impl <T: Hash + Eq + Clone> GSet<T> {
     }
 
     /// Returns true if the set contains no elements.
-    pub fn is_empty(&self) -> bool{ self.len() == 0 }
+    pub fn is_empty(&self) -> bool { self.elements.is_empty() }
 
     pub fn is_subset(&self, other: &GSet<T>) -> bool {
         self.elements.is_subset(&other.elements)
@@ -101,9 +100,7 @@ impl <T> Crdt for GSet<T> where T: Clone + Eq + Hash {
     /// assert!(local.contains(&2));
     /// ```
     fn merge(&mut self, other: GSet<T>) {
-        for element in other.elements.into_iter() {
-            self.insert(element);
-        }
+        self.elements.extend(other.elements.into_iter());
     }
 
     /// Apply an insert operation to the set.
@@ -130,15 +127,15 @@ impl <T> Crdt for GSet<T> where T: Clone + Eq + Hash {
     }
 }
 
-impl <T: Eq + Hash> PartialEq for GSet<T> {
+impl <T> PartialEq for GSet<T> where T: Eq + Hash {
     fn eq(&self, other: &GSet<T>) -> bool {
         self.elements == other.elements
     }
 }
 
-impl <T: Eq + Hash> Eq for GSet<T> {}
+impl <T> Eq for GSet<T> where T: Eq + Hash {}
 
-impl <T: Eq + Hash> PartialOrd for GSet<T> {
+impl <T> PartialOrd for GSet<T> where T: Eq + Hash {
     fn partial_cmp(&self, other: &GSet<T>) -> Option<Ordering> {
         if self.elements == other.elements {
             Some(Equal)
@@ -152,13 +149,7 @@ impl <T: Eq + Hash> PartialOrd for GSet<T> {
     }
 }
 
-impl <T : Eq + Hash + Debug> Debug for GSet<T> {
-     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-         self.elements.fmt(f)
-     }
-}
-
-impl <T: Clone + Eq + Hash> Clone for GSet<T> {
+impl <T> Clone for GSet<T> where T: Clone + Eq + Hash {
     fn clone(&self) -> GSet<T> {
         GSet { elements: self.elements.clone() }
     }
