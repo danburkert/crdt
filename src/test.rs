@@ -1,51 +1,29 @@
 //! Utility functions for using CRDTs in tests.
 
 use std::cmp::Ordering::Equal;
-use std::sync::atomic::Ordering::SeqCst;
-use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT};
 
-use quickcheck::TestResult;
+use rand::{thread_rng, Rng};
 
-use {Crdt, ReplicaId};
+use Crdt;
 
-static mut REPLICA_COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
+pub fn apply_is_commutative<C>(crdt: C, mut ops: Vec<C::Operation>) -> bool where C: Crdt {
+    let expected = ops.iter()
+                      .cloned()
+                      .fold(crdt.clone(), |mut crdt, op| {
+                          crdt.apply(op);
+                          crdt
+                      });
 
-/// Generate a replica ID suitable for local testing.
-///
-/// The replica ID is guaranteed to be unique within the processes. This
-/// function should **not** be used for generating replica IDs in a distributed
-/// system.
-pub fn gen_replica_id() -> ReplicaId {
-    let id = unsafe { REPLICA_COUNT.fetch_add(1, SeqCst) as u64 };
-    ReplicaId(id)
-}
+    thread_rng().shuffle(&mut ops[..]);
 
-pub fn apply_is_commutative<C>(crdt: C, ops: Vec<C::Operation>) -> TestResult where C: Crdt {
-    // This test takes too long with too many operations
-    if ops.len() > 5 { return TestResult::discard(); }
-
-    let expected: C = ops.iter()
-                         .cloned()
-                         .fold(crdt.clone(), |mut crdt, op| {
-                             crdt.apply(op);
-                             crdt
-                         });
-
-    TestResult::from_bool(
-        ops[..].permutations()
-               .map(|permutation| {
-                   permutation.iter().cloned().fold(crdt.clone(), |mut crdt, op| {
+    expected == ops.into_iter()
+                   .fold(crdt.clone(), |mut crdt, op| {
                        crdt.apply(op);
                        crdt
                    })
-               })
-               .all(|crdt| crdt == expected))
 }
 
-pub fn merge_is_commutative<C>(crdt: C, crdts: Vec<C>) -> TestResult where C: Crdt {
-    // This test takes too long with too many crdts
-    if crdts.len() > 5 { return TestResult::discard(); }
-
+pub fn merge_is_commutative<C>(crdt: C, mut crdts: Vec<C>) -> bool where C: Crdt {
     let expected: C = crdts.iter()
                            .cloned()
                            .fold(crdt.clone(), |mut crdt, other| {
@@ -53,15 +31,13 @@ pub fn merge_is_commutative<C>(crdt: C, crdts: Vec<C>) -> TestResult where C: Cr
                                crdt
                            });
 
-    TestResult::from_bool(
-        crdts[..].permutations()
-                 .map(|permutation| {
-                     permutation.iter().cloned().fold(crdt.clone(), |mut crdt, other| {
+    thread_rng().shuffle(&mut crdts[..]);
+
+    expected == crdts.into_iter()
+                     .fold(crdt.clone(), |mut crdt, other| {
                          crdt.merge(other);
                          crdt
                      })
-                 })
-                 .all(|crdt| crdt == expected))
 }
 
 pub fn ordering_lte<C>(mut a: C, b: C) -> bool where C: Crdt {

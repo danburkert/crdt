@@ -16,7 +16,7 @@
 //! ###### `TpSet`
 //!
 //! A two-phase set. Elements may be added and subsequently removed, but once
-//! removed, an element may never be added again. `2PSet` should be preferred
+//! removed, an element may never be added again. `TpSet` should be preferred
 //! when the application has logical monotonicity in its interactions with the
 //! set, and will never need to add an element to the set after it has been
 //! removed.

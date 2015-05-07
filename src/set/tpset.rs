@@ -284,7 +284,7 @@ impl <T> Arbitrary for TpSetOp<T> where T: Arbitrary {
 #[cfg(test)]
 mod test {
 
-    use quickcheck::{TestResult, quickcheck};
+    use quickcheck::quickcheck;
 
     use {test, Crdt};
     use super::{TpSet, TpSetOp};
@@ -294,12 +294,12 @@ mod test {
 
     #[test]
     fn check_apply_is_commutative() {
-        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> TestResult);
+        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> bool);
     }
 
     #[test]
     fn check_merge_is_commutative() {
-        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> TestResult);
+        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> bool);
     }
 
     #[test]

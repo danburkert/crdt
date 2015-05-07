@@ -5,9 +5,6 @@ use std::collections::HashMap;
 use {Crdt, ReplicaId};
 
 #[cfg(any(quickcheck, test))]
-use test::gen_replica_id;
-
-#[cfg(any(quickcheck, test))]
 use quickcheck::{Arbitrary, Gen};
 
 /// A grow-only counter.
@@ -205,6 +202,7 @@ impl PartialOrd for GCounter {
 #[cfg(any(quickcheck, test))]
 impl Arbitrary for GCounter {
     fn arbitrary<G>(g: &mut G) -> GCounter where G: Gen {
+        use gen_replica_id;
         GCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
     }
     fn shrink(&self) -> Box<Iterator<Item=GCounter> + 'static> {
@@ -233,7 +231,7 @@ impl Arbitrary for GCounterIncrement {
 #[cfg(test)]
 mod test {
 
-    use quickcheck::{TestResult, quickcheck};
+    use quickcheck::quickcheck;
 
     use {Crdt, ReplicaId, test};
     use counter::{GCounter, GCounterIncrement};
@@ -243,12 +241,12 @@ mod test {
 
     #[test]
     fn check_apply_is_commutative() {
-        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> TestResult);
+        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> bool);
     }
 
     #[test]
     fn check_merge_is_commutative() {
-        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> TestResult);
+        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> bool);
     }
 
     #[test]

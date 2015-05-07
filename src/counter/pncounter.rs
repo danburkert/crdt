@@ -1,29 +1,24 @@
-//! Counter CRDTs.
-
-use std::cmp;
 use std::cmp::Ordering::{self, Greater, Less, Equal};
 use std::collections::HashMap;
 
 use {Crdt, ReplicaId};
+use pn::Pn;
 
 #[cfg(any(quickcheck, test))]
 use quickcheck::{Arbitrary, Gen};
-
-#[cfg(any(quickcheck, test))]
-use test::gen_replica_id;
 
 /// A incrementable and decrementable counter.
 #[derive(Clone, Debug, Eq)]
 pub struct PnCounter {
     replica_id: ReplicaId,
-    counts: HashMap<ReplicaId, (u64, u64)>,
+    counts: HashMap<ReplicaId, Pn>,
 }
 
-/// An increment or decrement operation over `PnCounter` CRDTs.
+/// An increment operation on a `PnCounter` CRDT.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct PnCounterIncrement {
     replica_id: ReplicaId,
-    amount: i64,
+    pn: Pn,
 }
 
 impl PnCounter {
@@ -56,7 +51,7 @@ impl PnCounter {
     /// assert_eq!(0, counter.count());
     /// ```
     pub fn count(&self) -> i64 {
-        self.counts.values().map(|&(p, n)| p as i64 - n as i64).fold(0, |a, b| a + b)
+        self.counts.values().fold(0, |a, b| a + b.count())
     }
 
     /// Increment the counter by `amount`. If `amount` is negative, then the
@@ -96,9 +91,9 @@ impl PnCounter {
     /// replica1.increment(-1);             // replica1 is in an undefined state
     /// ```
     pub fn increment(&mut self, amount: i64) -> PnCounterIncrement {
-        let operation = PnCounterIncrement { replica_id: self.replica_id, amount: amount };
-        self.apply(operation);
-        operation
+        let pn = self.counts.entry(self.replica_id).or_insert(Pn::new());
+        pn.increment(amount);
+        PnCounterIncrement { replica_id: self.replica_id, pn: pn.clone() }
     }
 
     /// Get the replica ID of this counter.
@@ -131,18 +126,16 @@ impl Crdt for PnCounter {
     /// assert_eq!(1, local.count());
     /// ```
     fn merge(&mut self, other: PnCounter) {
-        for (&replica_id, &(other_p, other_n)) in other.counts.iter() {
-            let count = match self.counts.get(&replica_id) {
-                Some(&(self_p, self_n)) => (cmp::max(self_p, other_p), cmp::max(self_n, other_n)),
-                None => (other_p, other_n)
-            };
-            self.counts.insert(replica_id, count);
+        for (replica_id, pn) in other.counts.into_iter() {
+            self.counts.entry(replica_id).or_insert(Pn::new()).merge(pn);
         }
     }
 
     /// Apply an increment operation to this counter.
     ///
     /// This method is used to perform operation-based replication.
+    ///
+    /// Applying an operation to a `PnCounter` is idempotent.
     ///
     /// ##### Example
     ///
@@ -158,19 +151,8 @@ impl Crdt for PnCounter {
     /// assert_eq!(-12, local.count());
     /// ```
     fn apply(&mut self, operation: PnCounterIncrement) {
-        let (p_amount, n_amount) =
-            if operation.amount > 0 {
-                (operation.amount as u64, 0)
-            } else {
-                (0, operation.amount.abs() as u64)
-            };
-
-        let count = match self.counts.get_mut(&operation.replica_id) {
-            Some(&mut (self_p, self_n)) => (self_p + p_amount, self_n + n_amount),
-            None => (p_amount, n_amount)
-        };
-
-        self.counts.insert(operation.replica_id, count);
+        let PnCounterIncrement { replica_id, pn } = operation;
+        self.counts.entry(replica_id).or_insert(Pn::new()).merge(pn);
     }
 }
 
@@ -187,15 +169,12 @@ impl PartialOrd for PnCounter {
         ///
         /// Precondition: `a.counts.len() <= b.counts.len()`
         fn a_gt_b(a: &PnCounter, b: &PnCounter) -> bool {
-            for (&replica_id, &(a_p_count, a_n_count)) in a.counts.iter() {
-                match b.counts.get(&replica_id) {
-                    Some(&(b_p_count, b_n_count))
-                        if a_p_count > b_p_count || a_n_count > b_n_count => return true,
-                    None => return true,
-                    _ => ()
+            a.counts.iter().any(|(replica_id, a_pn)| {
+                match b.counts.get(replica_id) {
+                    Some(b_pn) => a_pn.p > b_pn.p || a_pn.n > b_pn.n,
+                    None => true,
                 }
-            }
-            false
+            })
         }
 
         let (self_gt_other, other_gt_self) =
@@ -217,6 +196,7 @@ impl PartialOrd for PnCounter {
 #[cfg(any(quickcheck, test))]
 impl Arbitrary for PnCounter {
     fn arbitrary<G>(g: &mut G) -> PnCounter where G: Gen {
+        use gen_replica_id;
         PnCounter { replica_id: gen_replica_id(), counts: Arbitrary::arbitrary(g) }
     }
     fn shrink(&self) -> Box<Iterator<Item=PnCounter> + 'static> {
@@ -234,18 +214,18 @@ impl PnCounterIncrement {
 #[cfg(any(quickcheck, test))]
 impl Arbitrary for PnCounterIncrement {
     fn arbitrary<G>(g: &mut G) -> PnCounterIncrement where G: Gen {
-        PnCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
+        PnCounterIncrement { replica_id: Arbitrary::arbitrary(g), pn: Arbitrary::arbitrary(g) }
     }
     fn shrink(&self) -> Box<Iterator<Item=PnCounterIncrement> + 'static> {
         let replica_id = self.replica_id();
-        Box::new(self.amount.shrink().map(move |amount| PnCounterIncrement { replica_id: replica_id, amount: amount }))
+        Box::new(self.pn.shrink().map(move |pn| PnCounterIncrement { replica_id: replica_id, pn: pn }))
     }
 }
 
 #[cfg(test)]
 mod test {
 
-    use quickcheck::{TestResult, quickcheck};
+    use quickcheck::quickcheck;
 
     use {Crdt, ReplicaId, test};
     use super::{PnCounter, PnCounterIncrement};
@@ -255,12 +235,12 @@ mod test {
 
     #[test]
     fn check_apply_is_commutative() {
-        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> TestResult);
+        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> bool);
     }
 
     #[test]
     fn check_merge_is_commutative() {
-        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> TestResult);
+        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> bool);
     }
 
     #[test]

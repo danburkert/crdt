@@ -21,8 +21,9 @@ impl <T> LwwRegister<T> {
     ///
     /// ```
     /// use crdt::register::LwwRegister;
+    /// use crdt::TransactionId;
     ///
-    /// let mut register = LwwRegister::new("my-value", TransactionId(0));
+    /// let mut register = LwwRegister::new("my-value", TransactionId::from(0));
     /// ```
     pub fn new<I>(value: T, transaction_id: I) -> LwwRegister<T>
     where I: Into<TransactionId> {
@@ -49,8 +50,9 @@ impl <T> LwwRegister<T> {
     ///
     /// ```
     /// # use crdt::register::LwwRegister;
+    /// # use crdt::TransactionId;
     /// let mut register = LwwRegister::new("my-value", 0);
-    /// assert_eq!(TransactionId(0), register.transaction_id());
+    /// assert_eq!(TransactionId::from(0), register.transaction_id());
     /// ```
     pub fn transaction_id(&self) -> TransactionId {
         self.transaction_id
@@ -68,8 +70,9 @@ impl <T> LwwRegister<T> where T: Clone {
     ///
     /// ```
     /// # use crdt::register::LwwRegister;
+    /// # use crdt::TransactionId;
     /// let mut register = LwwRegister::new("my-value", 0);
-    /// assert_eq!(TransactionId(0), register.transaction_id());
+    /// assert_eq!(TransactionId::from(0), register.transaction_id());
     /// ```
     pub fn set<I>(&mut self, value: T, transaction_id: I) -> Option<LwwRegister<T>>
     where I: Into<TransactionId> {
@@ -165,7 +168,7 @@ impl <T> Arbitrary for LwwRegister<T> where T: Arbitrary {
 #[cfg(test)]
 mod test {
 
-    use quickcheck::{TestResult, quickcheck};
+    use quickcheck::quickcheck;
 
     use {test, Crdt};
     use register::LwwRegister;
@@ -175,12 +178,12 @@ mod test {
 
     #[test]
     fn check_apply_is_commutative() {
-        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> TestResult);
+        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> bool);
     }
 
     #[test]
     fn check_merge_is_commutative() {
-        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> TestResult);
+        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> bool);
     }
 
     #[test]

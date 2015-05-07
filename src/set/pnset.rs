@@ -1,27 +1,30 @@
 use std::cmp::Ordering::{self, Greater, Less, Equal};
-use std::collections::HashMap;
-use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::collections::hash_map;
+use std::collections::hash_map::{self, HashMap};
 use std::hash::Hash;
 
 #[cfg(any(quickcheck, test))]
 use quickcheck::{Arbitrary, Gen};
 
 use {Crdt, ReplicaId};
-use counter::{PnCounter, PnCounterIncrement};
+use pn::Pn;
 
 /// A counting add/remove set.
 #[derive(Clone, Debug)]
 pub struct PnSet<T> where T: Eq + Hash {
     replica_id: ReplicaId,
-    elements: HashMap<T, PnCounter>
+    elements: HashMap<T, HashMap<ReplicaId, Pn>>,
 }
 
 /// An insert or remove operation over `PnSet` CRDTs.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PnSetOp<T> {
     element: T,
-    counter_op: PnCounterIncrement,
+    replica_id: ReplicaId,
+    pn: Pn,
+}
+
+fn count(replica_counts: &HashMap<ReplicaId, Pn>) -> i64 {
+    replica_counts.values().fold(0, |sum, pn| sum + pn.count())
 }
 
 impl <T> PnSet<T> where T: Clone + Eq + Hash {
@@ -75,16 +78,13 @@ impl <T> PnSet<T> where T: Clone + Eq + Hash {
 
     /// Increments the count of an element in the set by the given amount.
     fn increment_element(&mut self, element: T, amount: i64) -> PnSetOp<T> {
-        let counter_op = match self.elements.entry(element.clone()) {
-            Occupied(ref mut entry) => entry.get_mut().increment(amount),
-            Vacant(entry) => {
-                let mut counter = PnCounter::new(self.replica_id);
-                let counter_op = counter.increment(amount);
-                entry.insert(counter);
-                counter_op
-            },
-        };
-        PnSetOp { element: element, counter_op: counter_op }
+        let pn = self.elements
+                     .entry(element.clone())
+                     .or_insert_with(|| HashMap::new())
+                     .entry(self.replica_id)
+                     .or_insert(Pn::new());
+        pn.increment(amount);
+        PnSetOp { replica_id: self.replica_id, element: element, pn: pn.clone() }
     }
 
     /// Returns the number of elements in the set.
@@ -93,8 +93,10 @@ impl <T> PnSet<T> where T: Clone + Eq + Hash {
     }
 
     /// Returns true if the set contains the value.
-    pub fn contains(&self, value: &T) -> bool {
-        self.elements.get(value).map_or(false, |counter| counter.count() > 0)
+    pub fn contains(&self, element: &T) -> bool {
+        self.elements
+            .get(element)
+            .map_or(false, |replica_counts| count(replica_counts) > 0)
     }
 
     /// Returns true if the set contains no elements.
@@ -141,14 +143,12 @@ impl <T> Crdt for PnSet<T> where T: Clone + Eq + Hash {
     /// assert_eq!(2, local.len());
     /// ```
     fn merge(&mut self, other: PnSet<T>) {
-        for (element, counter) in other.elements.into_iter() {
-            match self.elements.entry(element) {
-                Occupied(ref mut entry) => {
-                    entry.get_mut().merge(counter);
-                },
-                Vacant(entry) => {
-                    entry.insert(counter);
-                },
+        for (element, other_count) in other.elements.into_iter() {
+            let self_count = self.elements.entry(element).or_insert_with(|| HashMap::new());
+            for (replica_id, pn) in other_count.into_iter() {
+                self_count.entry(replica_id)
+                          .or_insert(Pn::new())
+                          .merge(pn);
             }
         }
     }
@@ -171,14 +171,13 @@ impl <T> Crdt for PnSet<T> where T: Clone + Eq + Hash {
     /// assert!(local.contains(&13));
     /// ```
     fn apply(&mut self, operation: PnSetOp<T>) {
-        match self.elements.entry(operation.element) {
-            Occupied(ref mut entry) => entry.get_mut().apply(operation.counter_op),
-            Vacant(entry) => {
-                let mut counter = PnCounter::new(self.replica_id);
-                counter.apply(operation.counter_op);
-                entry.insert(counter);
-            },
-        }
+        let PnSetOp { element, replica_id, pn } = operation;
+        self.elements
+            .entry(element)
+            .or_insert_with(|| HashMap::new())
+            .entry(replica_id)
+            .or_insert(Pn::new())
+            .merge(pn);
     }
 }
 
@@ -192,29 +191,41 @@ impl <T : Eq + Hash> Eq for PnSet<T> {}
 
 impl <T : Eq + Hash> PartialOrd for PnSet<T> {
     fn partial_cmp(&self, other: &PnSet<T>) -> Option<Ordering> {
-        if self.elements == other.elements {
-            return Some(Equal);
+
+        fn a_gt_b(a: &HashMap<ReplicaId, Pn>, b: &HashMap<ReplicaId, Pn>) -> bool {
+            a.len() > b.len() ||
+                a.iter().any(|(replica_id, a_pn)| {
+                    b.get(replica_id)
+                     .map_or(true, |b_pn| a_pn.p > b_pn.p || a_pn.n > b_pn.n)
+                })
         }
+
         let self_is_greater =
             self.elements
                 .iter()
-                .any(|(element, counter)| {
-                    other.elements.get(element).map_or(true, |other_counter| counter > other_counter)
+                .any(|(element, counts)| {
+                    other.elements
+                         .get(element)
+                         .map_or(true, |other_counts| a_gt_b(counts, other_counts))
                 });
 
         let other_is_greater =
             other.elements
-                .iter()
-                .any(|(element, other_counter)| {
-                    self.elements.get(element).map_or(true, |counter| other_counter > counter)
-                });
+                 .iter()
+                 .any(|(element, counts)| {
+                     self.elements
+                          .get(element)
+                          .map_or(true, |other_counts| a_gt_b(counts, other_counts))
+                 });
 
         if self_is_greater && other_is_greater {
             None
         } else if self_is_greater {
             Some(Greater)
-        } else {
+        } else if other_is_greater {
             Some(Less)
+        } else {
+            Some(Equal)
         }
     }
 }
@@ -222,11 +233,10 @@ impl <T : Eq + Hash> PartialOrd for PnSet<T> {
 #[cfg(any(quickcheck, test))]
 impl <T> Arbitrary for PnSet<T> where T: Arbitrary + Clone + Eq + Hash {
     fn arbitrary<G>(g: &mut G) -> PnSet<T> where G: Gen {
-        use test::gen_replica_id;
-        let elements: Vec<(T, PnCounter)> = Arbitrary::arbitrary(g);
+        use gen_replica_id;
         PnSet {
             replica_id: gen_replica_id(),
-            elements: elements.into_iter().collect(),
+            elements: Arbitrary::arbitrary(g),
         }
     }
     fn shrink(&self) -> Box<Iterator<Item=PnSet<T>> + 'static> {
@@ -243,34 +253,33 @@ impl <T> Arbitrary for PnSetOp<T> where T: Arbitrary {
     fn arbitrary<G>(g: &mut G) -> PnSetOp<T> where G: Gen {
         PnSetOp {
             element: Arbitrary::arbitrary(g),
-            counter_op: Arbitrary::arbitrary(g),
+            replica_id: Arbitrary::arbitrary(g),
+            pn: Arbitrary::arbitrary(g),
         }
     }
     fn shrink(&self) -> Box<Iterator<Item=PnSetOp<T>> + 'static> {
-        let element = self.element.clone();
-        let counter_op = self.counter_op.clone();
+        let PnSetOp { element, replica_id, pn } = self.clone();
         Box::new(
-            self.element
-                .shrink()
-                .map(move |element| PnSetOp { element: element, counter_op: counter_op.clone() })
-                .chain(
-                    self.counter_op
-                        .shrink()
-                        .map(move |op| PnSetOp { element: element.clone(), counter_op: op })))
+            (element, replica_id, pn).shrink()
+                                     .map(|(element, replica_id, pn)| {
+                                         PnSetOp { element: element.clone(),
+                                                   replica_id: replica_id.clone(),
+                                                   pn: pn.clone() }
+                                     }))
     }
 }
 
 pub struct Iter<'a, T: 'a> {
-    inner: hash_map::Iter<'a, T, PnCounter>,
+    inner: hash_map::Iter<'a, T, HashMap<ReplicaId, Pn>>,
 }
 
 impl<'a, T> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
-        while let Some(item) = self.inner.next() {
-            if item.1.count() > 0 {
-                return Some(item.0)
+        while let Some((ref element, ref replica_counts)) = self.inner.next() {
+            if count(replica_counts) > 0 {
+                return Some(element)
             }
         }
         None
@@ -284,7 +293,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
 #[cfg(test)]
 mod test {
 
-    use quickcheck::{TestResult, quickcheck};
+    use quickcheck::quickcheck;
 
     use {Crdt, ReplicaId, test};
     use super::{PnSet, PnSetOp};
@@ -294,12 +303,12 @@ mod test {
 
     #[test]
     fn check_apply_is_commutative() {
-        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> TestResult);
+        quickcheck(test::apply_is_commutative::<C> as fn(C, Vec<O>) -> bool);
     }
 
     #[test]
     fn check_merge_is_commutative() {
-        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> TestResult);
+        quickcheck(test::merge_is_commutative::<C> as fn(C, Vec<C>) -> bool);
     }
 
     #[test]

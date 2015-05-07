@@ -5,17 +5,20 @@
 //! 1. [_A comprehensive study of Convergent and Commutative Replicated Data Types_](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) (Shapiro, et al.)
 //! 2. [_An Optimized Conflict-free Replicated Set_](http://arxiv.org/pdf/1210.3368.pdf) (Bieniusa, et al.)
 
-#![cfg_attr(test, feature(collections, custom_attribute, plugin))]
+#![cfg_attr(test, feature(custom_attribute, plugin))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
 #[cfg(any(quickcheck, test))]
 extern crate quickcheck;
+#[cfg(any(quickcheck, test))]
+extern crate rand;
 
 pub mod counter;
 pub mod register;
 pub mod set;
+mod pn;
 
-#[cfg(any(quickcheck, test))]
+#[cfg(test)]
 pub mod test;
 
 /// A Conflict-free Replicated Data Type.
@@ -40,6 +43,11 @@ pub mod test;
 /// equivalent to operation-based CRDTs. The CRDTs exposed by this library
 /// allow for either state-based or operation-based replication, or a mix of
 /// both.
+///
+/// When possible, operation-based replication is idempotent, so applying an
+/// operation to a replica multiple times will have no effect. Consult the
+/// individual CRDT documentation to determine if operation-based replication is
+/// idempotent. State-based replication is always idempotent.
 ///
 /// ###### Partial Ordering
 ///
@@ -82,9 +90,9 @@ impl ReplicaId {
     }
 }
 
-impl Into<ReplicaId> for u64 {
-    fn into(self) -> ReplicaId {
-        ReplicaId(self)
+impl From<u64> for ReplicaId {
+    fn from(val: u64) -> ReplicaId {
+        ReplicaId(val)
     }
 }
 
@@ -96,6 +104,19 @@ impl quickcheck::Arbitrary for ReplicaId {
     fn shrink(&self) -> Box<Iterator<Item=ReplicaId> + 'static> {
         Box::new(self.id().shrink().map(|id| ReplicaId(id)))
     }
+}
+
+/// Generate a replica ID suitable for local testing.
+///
+/// The replica ID is guaranteed to be unique within the processes. This
+/// function should **not** be used for generating replica IDs in a distributed
+/// system.
+#[cfg(any(quickcheck, test))]
+pub fn gen_replica_id() -> ReplicaId {
+    use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
+    static mut REPLICA_COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
+    let id = unsafe { REPLICA_COUNT.fetch_add(1, Ordering::SeqCst) as u64 };
+    ReplicaId(id)
 }
 
 /// The Id for an individual operation on a CRDT.
@@ -117,9 +138,9 @@ impl TransactionId {
     }
 }
 
-impl Into<TransactionId> for u64 {
-    fn into(self) -> TransactionId {
-        TransactionId(self)
+impl From<u64> for TransactionId {
+    fn from(val: u64) -> TransactionId {
+        TransactionId(val)
     }
 }
 
