@@ -10,7 +10,7 @@ use quickcheck::{Arbitrary, Gen};
 use Crdt;
 
 /// A two-phase set.
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, Eq, PartialEq)]
 pub struct TpSet<T> where T: Eq + Hash {
     elements: HashMap<T, bool>,
 }
@@ -22,7 +22,7 @@ pub enum TpSetOp<T> {
     Remove(T),
 }
 
-impl <T : Hash + Eq + Clone> TpSet<T> {
+impl <T> TpSet<T> where T: Clone + Eq + Hash {
 
     /// Create a new two-phase set.
     ///
@@ -228,7 +228,7 @@ impl <T : Eq + Hash> PartialOrd for TpSet<T> {
     }
 }
 
-impl <T : Eq + Hash + Debug> Debug for TpSet<T> {
+impl <T> Debug for TpSet<T> where T: Debug + Eq + Hash {
      fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
          try!(write!(f, "{{present: {{"));
          for (i, x) in self.elements
@@ -253,7 +253,7 @@ impl <T : Eq + Hash + Debug> Debug for TpSet<T> {
 }
 
 #[cfg(any(quickcheck, test))]
-impl <T : Arbitrary + Eq + Hash + Clone> Arbitrary for TpSet<T> {
+impl <T> Arbitrary for TpSet<T> where T: Arbitrary + Clone + Eq + Hash {
     fn arbitrary<G: Gen>(g: &mut G) -> TpSet<T> {
         TpSet { elements: Arbitrary::arbitrary(g) }
     }

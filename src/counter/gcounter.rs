@@ -208,20 +208,14 @@ impl Arbitrary for GCounter {
     }
 }
 
-impl GCounterOp {
-    pub fn replica_id(&self) -> ReplicaId {
-        self.replica_id
-    }
-}
-
 #[cfg(any(quickcheck, test))]
 impl Arbitrary for GCounterOp {
     fn arbitrary<G>(g: &mut G) -> GCounterOp where G: Gen {
-        GCounterOp { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
+        GCounterOp { replica_id: Arbitrary::arbitrary(g), count: Arbitrary::arbitrary(g) }
     }
     fn shrink(&self) -> Box<Iterator<Item=GCounterOp> + 'static> {
-        let replica_id = self.replica_id();
-        Box::new(self.amount.shrink().map(move |amount| GCounterOp { replica_id: replica_id, amount: amount }))
+        let replica_id = self.replica_id;
+        Box::new(self.count.shrink().map(move |count| GCounterOp { replica_id: replica_id, count: count }))
     }
 }
 

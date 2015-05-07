@@ -205,19 +205,13 @@ impl Arbitrary for PnCounter {
     }
 }
 
-impl PnCounterOp {
-    pub fn replica_id(&self) -> ReplicaId {
-        self.replica_id
-    }
-}
-
 #[cfg(any(quickcheck, test))]
 impl Arbitrary for PnCounterOp {
     fn arbitrary<G>(g: &mut G) -> PnCounterOp where G: Gen {
         PnCounterOp { replica_id: Arbitrary::arbitrary(g), pn: Arbitrary::arbitrary(g) }
     }
     fn shrink(&self) -> Box<Iterator<Item=PnCounterOp> + 'static> {
-        let replica_id = self.replica_id();
+        let replica_id = self.replica_id;
         Box::new(self.pn.shrink().map(move |pn| PnCounterOp { replica_id: replica_id, pn: pn }))
     }
 }

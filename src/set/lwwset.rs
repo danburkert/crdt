@@ -50,22 +50,16 @@ impl <T> LwwSet<T> where T: Clone + Eq + Hash {
     /// assert!(set.contains(&"first-element"));
     /// ```
     pub fn insert(&mut self, element: T, transaction_id: u64) -> Option<LwwSetOp<T>> {
-        let updated = match self.elements.entry(element.clone()) {
+        match self.elements.entry(element.clone()) {
             Occupied(ref mut entry) if transaction_id >= entry.get().1 => {
                 entry.insert((true, transaction_id));
-                true
+                Some(LwwSetOp::Insert(element, transaction_id))
             },
             Vacant(entry) => {
                 entry.insert((true, transaction_id));
-                true
+                Some(LwwSetOp::Insert(element, transaction_id))
             },
-            _ => false,
-        };
-
-        if updated {
-            Some(LwwSetOp::Insert(element, transaction_id))
-        } else {
-            None
+            _ => None,
         }
     }
 

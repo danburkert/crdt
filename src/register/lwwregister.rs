@@ -2,6 +2,7 @@
 use quickcheck::{Arbitrary, Gen};
 
 use std::cmp::Ordering;
+use std::ops::Deref;
 
 use {Crdt, TransactionId};
 
@@ -12,7 +13,7 @@ pub struct LwwRegister<T> {
     transaction_id: TransactionId,
 }
 
-impl <T> LwwRegister<T> {
+impl <T> LwwRegister<T> where T: Clone {
 
     /// Create a new last-writer-wins register with the provided initial value
     /// and transaction ID.
@@ -43,24 +44,6 @@ impl <T> LwwRegister<T> {
         &self.value
     }
 
-    /// Get the transaction ID associated with the current value in the
-    /// register.
-    ///
-    /// ##### Example
-    ///
-    /// ```
-    /// # use crdt::register::LwwRegister;
-    /// # use crdt::TransactionId;
-    /// let mut register = LwwRegister::new("my-value", 0);
-    /// assert_eq!(TransactionId::from(0), register.transaction_id());
-    /// ```
-    pub fn transaction_id(&self) -> TransactionId {
-        self.transaction_id
-    }
-}
-
-impl <T> LwwRegister<T> where T: Clone {
-
     /// Set the register to the provided value and transaction ID.
     ///
     /// Returns an operation that can be applied to other replicas if the set
@@ -83,6 +66,29 @@ impl <T> LwwRegister<T> where T: Clone {
             Some(self.clone())
         } else { None }
     }
+
+    /// Get the transaction ID associated with the current value in the
+    /// register.
+    ///
+    /// ##### Example
+    ///
+    /// ```
+    /// # use crdt::register::LwwRegister;
+    /// # use crdt::TransactionId;
+    /// let mut register = LwwRegister::new("my-value", 0);
+    /// assert_eq!(TransactionId::from(0), register.transaction_id());
+    /// ```
+    pub fn transaction_id(&self) -> TransactionId {
+        self.transaction_id
+    }
+}
+
+impl<T> Deref for LwwRegister<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.value
+    }
 }
 
 impl <T> Crdt for LwwRegister<T> where T: Clone {
@@ -103,7 +109,7 @@ impl <T> Crdt for LwwRegister<T> where T: Clone {
     /// let mut remote = LwwRegister::new("remote", 2);
     ///
     /// local.merge(remote);
-    /// assert_eq!("remote", *local.get());
+    /// assert_eq!("remote", *local);
     /// ```
     fn merge(&mut self, other: LwwRegister<T>) {
         if self.transaction_id <= other.transaction_id {
@@ -129,7 +135,7 @@ impl <T> Crdt for LwwRegister<T> where T: Clone {
     /// let op = remote.set("remote-2", 2).expect("Register set failed!");
     ///
     /// local.apply(op);
-    /// assert_eq!("remote-2", *local.get());
+    /// assert_eq!("remote-2", *local);
     /// ```
     fn apply(&mut self, op: LwwRegister<T>) {
         self.merge(op);
@@ -204,7 +210,7 @@ mod test {
         for (transaction_id, value) in versions.iter().enumerate() {
             register.set(value.clone(), transaction_id as u64);
         }
-        register.get() == versions.last().unwrap_or(&"".to_string())
+        &*register == versions.last().unwrap_or(&"".to_string())
     }
 
     #[quickcheck]
