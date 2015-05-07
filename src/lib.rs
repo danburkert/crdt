@@ -72,7 +72,7 @@ pub trait Crdt : Clone + Eq + PartialOrd {
     /// Apply an operation to this CRDT.
     ///
     /// This method is used to perform operation-based replication.
-    fn apply(&mut self, operation: Self::Operation);
+    fn apply(&mut self, op: Self::Operation);
 }
 
 /// The Id of an individual replica of a Crdt.

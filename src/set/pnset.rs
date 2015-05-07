@@ -157,6 +157,8 @@ impl <T> Crdt for PnSet<T> where T: Clone + Eq + Hash {
     ///
     /// This method is used to perform operation-based replication.
     ///
+    /// Applying an operation to a `PnSet` is idempotent.
+    ///
     /// ##### Example
     ///
     /// ```

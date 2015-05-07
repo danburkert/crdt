@@ -121,6 +121,8 @@ impl <T> Crdt for TpSet<T> where T: Clone + Eq + Hash {
     ///
     /// This method is used to perform state-based replication.
     ///
+    /// Applying an operation to a `TpSet` is idempotent.
+    ///
     /// ##### Example
     ///
     /// ```

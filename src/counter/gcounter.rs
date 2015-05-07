@@ -18,9 +18,9 @@ pub struct GCounter {
 
 /// An increment operation over `GCounter` CRDTs.
 #[derive(Debug, Clone, Copy)]
-pub struct GCounterIncrement {
+pub struct GCounterOp {
     replica_id: ReplicaId,
-    amount: u64
+    count: u64
 }
 
 impl GCounter {
@@ -87,10 +87,10 @@ impl GCounter {
     /// replica1.merge(replica2.clone()); // replica1 is in an undefined state
     /// replica2.merge(replica1.clone()); // replica2 is in an undefined state
     /// ```
-    pub fn increment(&mut self, amount: u64) -> GCounterIncrement {
-        let operation = GCounterIncrement { replica_id: self.replica_id, amount: amount };
-        self.apply(operation);
-        operation
+    pub fn increment(&mut self, amount: u64) -> GCounterOp {
+        let count = self.counts.entry(self.replica_id).or_insert(0);
+        *count += amount;
+        GCounterOp { replica_id: self.replica_id, count: *count }
     }
 
     /// Get the replica ID of this counter.
@@ -101,7 +101,7 @@ impl GCounter {
 
 impl Crdt for GCounter {
 
-    type Operation = GCounterIncrement;
+    type Operation = GCounterOp;
 
     /// Merge a replica into this counter.
     ///
@@ -123,18 +123,17 @@ impl Crdt for GCounter {
     /// assert_eq!(25, local.count());
     /// ```
     fn merge(&mut self, other: GCounter) {
-        for (replica_id, other_count) in other.counts.iter() {
-            let count = match self.counts.get_mut(replica_id) {
-                Some(self_count) => cmp::max(*self_count, *other_count),
-                None => *other_count
-            };
-            self.counts.insert(*replica_id, count);
+        for (&replica_id, &other_count) in other.counts.iter() {
+            let count = self.counts.entry(replica_id).or_insert(0);
+            *count = cmp::max(*count, other_count);
         }
     }
 
     /// Apply an increment operation to this counter.
     ///
     /// This method is used to perform operation-based replication.
+    ///
+    /// Applying an operation to a `GCounter` is idempotent.
     ///
     /// ##### Example
     ///
@@ -149,12 +148,10 @@ impl Crdt for GCounter {
     /// local.apply(op);
     /// assert_eq!(13, local.count());
     /// ```
-    fn apply(&mut self, operation: GCounterIncrement) {
-        let count = match self.counts.get_mut(&operation.replica_id) {
-            Some(self_count) => *self_count + operation.amount,
-            None => operation.amount
-        };
-        self.counts.insert(operation.replica_id, count);
+    fn apply(&mut self, op: GCounterOp) {
+        let GCounterOp { replica_id, count: other_count } = op;
+        let count = self.counts.entry(replica_id).or_insert(0);
+        *count = cmp::max(*count, other_count);
     }
 }
 
@@ -211,20 +208,20 @@ impl Arbitrary for GCounter {
     }
 }
 
-impl GCounterIncrement {
+impl GCounterOp {
     pub fn replica_id(&self) -> ReplicaId {
         self.replica_id
     }
 }
 
 #[cfg(any(quickcheck, test))]
-impl Arbitrary for GCounterIncrement {
-    fn arbitrary<G>(g: &mut G) -> GCounterIncrement where G: Gen {
-        GCounterIncrement { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
+impl Arbitrary for GCounterOp {
+    fn arbitrary<G>(g: &mut G) -> GCounterOp where G: Gen {
+        GCounterOp { replica_id: Arbitrary::arbitrary(g), amount: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Iterator<Item=GCounterIncrement> + 'static> {
+    fn shrink(&self) -> Box<Iterator<Item=GCounterOp> + 'static> {
         let replica_id = self.replica_id();
-        Box::new(self.amount.shrink().map(move |amount| GCounterIncrement { replica_id: replica_id, amount: amount }))
+        Box::new(self.amount.shrink().map(move |amount| GCounterOp { replica_id: replica_id, amount: amount }))
     }
 }
 
@@ -234,10 +231,10 @@ mod test {
     use quickcheck::quickcheck;
 
     use {Crdt, ReplicaId, test};
-    use counter::{GCounter, GCounterIncrement};
+    use counter::{GCounter, GCounterOp};
 
     type C = GCounter;
-    type O = GCounterIncrement;
+    type O = GCounterOp;
 
     #[test]
     fn check_apply_is_commutative() {

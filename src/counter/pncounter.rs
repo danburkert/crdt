@@ -16,7 +16,7 @@ pub struct PnCounter {
 
 /// An increment operation on a `PnCounter` CRDT.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub struct PnCounterIncrement {
+pub struct PnCounterOp {
     replica_id: ReplicaId,
     pn: Pn,
 }
@@ -90,10 +90,10 @@ impl PnCounter {
     /// replica1.increment(i64::MIN);       // OK
     /// replica1.increment(-1);             // replica1 is in an undefined state
     /// ```
-    pub fn increment(&mut self, amount: i64) -> PnCounterIncrement {
+    pub fn increment(&mut self, amount: i64) -> PnCounterOp {
         let pn = self.counts.entry(self.replica_id).or_insert(Pn::new());
         pn.increment(amount);
-        PnCounterIncrement { replica_id: self.replica_id, pn: pn.clone() }
+        PnCounterOp { replica_id: self.replica_id, pn: pn.clone() }
     }
 
     /// Get the replica ID of this counter.
@@ -104,7 +104,7 @@ impl PnCounter {
 
 impl Crdt for PnCounter {
 
-    type Operation = PnCounterIncrement;
+    type Operation = PnCounterOp;
 
     /// Merge a replica into this counter.
     ///
@@ -150,8 +150,8 @@ impl Crdt for PnCounter {
     /// local.apply(op);
     /// assert_eq!(-12, local.count());
     /// ```
-    fn apply(&mut self, operation: PnCounterIncrement) {
-        let PnCounterIncrement { replica_id, pn } = operation;
+    fn apply(&mut self, op: PnCounterOp) {
+        let PnCounterOp { replica_id, pn } = op;
         self.counts.entry(replica_id).or_insert(Pn::new()).merge(pn);
     }
 }
@@ -205,20 +205,20 @@ impl Arbitrary for PnCounter {
     }
 }
 
-impl PnCounterIncrement {
+impl PnCounterOp {
     pub fn replica_id(&self) -> ReplicaId {
         self.replica_id
     }
 }
 
 #[cfg(any(quickcheck, test))]
-impl Arbitrary for PnCounterIncrement {
-    fn arbitrary<G>(g: &mut G) -> PnCounterIncrement where G: Gen {
-        PnCounterIncrement { replica_id: Arbitrary::arbitrary(g), pn: Arbitrary::arbitrary(g) }
+impl Arbitrary for PnCounterOp {
+    fn arbitrary<G>(g: &mut G) -> PnCounterOp where G: Gen {
+        PnCounterOp { replica_id: Arbitrary::arbitrary(g), pn: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Iterator<Item=PnCounterIncrement> + 'static> {
+    fn shrink(&self) -> Box<Iterator<Item=PnCounterOp> + 'static> {
         let replica_id = self.replica_id();
-        Box::new(self.pn.shrink().map(move |pn| PnCounterIncrement { replica_id: replica_id, pn: pn }))
+        Box::new(self.pn.shrink().map(move |pn| PnCounterOp { replica_id: replica_id, pn: pn }))
     }
 }
 
@@ -228,10 +228,10 @@ mod test {
     use quickcheck::quickcheck;
 
     use {Crdt, ReplicaId, test};
-    use super::{PnCounter, PnCounterIncrement};
+    use super::{PnCounter, PnCounterOp};
 
     type C = PnCounter;
-    type O = PnCounterIncrement;
+    type O = PnCounterOp;
 
     #[test]
     fn check_apply_is_commutative() {

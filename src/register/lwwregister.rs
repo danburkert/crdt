@@ -116,6 +116,8 @@ impl <T> Crdt for LwwRegister<T> where T: Clone {
     ///
     /// This method is used to perform operation-based replication.
     ///
+    /// Applying an operation to a `LwwRegister` is idempotent.
+    ///
     /// ##### Example
     ///
     /// ```
@@ -129,8 +131,8 @@ impl <T> Crdt for LwwRegister<T> where T: Clone {
     /// local.apply(op);
     /// assert_eq!("remote-2", *local.get());
     /// ```
-    fn apply(&mut self, other: LwwRegister<T>) {
-        self.merge(other);
+    fn apply(&mut self, op: LwwRegister<T>) {
+        self.merge(op);
     }
 }
 

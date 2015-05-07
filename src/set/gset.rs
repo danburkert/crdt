@@ -16,7 +16,7 @@ pub struct GSet<T> where T: Eq + Hash {
 
 /// An insert operation over `GSet` CRDTs.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct GSetInsert<T> {
+pub struct GSetOp<T> {
     element: T
 }
 
@@ -47,9 +47,9 @@ impl <T: Hash + Eq + Clone> GSet<T> {
     /// set.insert("first-element");
     /// assert!(set.contains(&"first-element"));
     /// ```
-    pub fn insert(&mut self, element: T) -> Option<GSetInsert<T>> {
+    pub fn insert(&mut self, element: T) -> Option<GSetOp<T>> {
         if self.elements.insert(element.clone()) {
-            Some(GSetInsert { element: element })
+            Some(GSetOp { element: element })
         } else {
             None
         }
@@ -79,7 +79,7 @@ impl <T: Hash + Eq + Clone> GSet<T> {
 
 impl <T> Crdt for GSet<T> where T: Clone + Eq + Hash {
 
-    type Operation = GSetInsert<T>;
+    type Operation = GSetOp<T>;
 
     /// Merge a replica into the set.
     ///
@@ -110,6 +110,8 @@ impl <T> Crdt for GSet<T> where T: Clone + Eq + Hash {
     ///
     /// This method is used to perform operation-based replication.
     ///
+    /// Applying an operation to a `GSet` is idempotent.
+    ///
     /// ##### Example
     ///
     /// ```
@@ -123,8 +125,8 @@ impl <T> Crdt for GSet<T> where T: Clone + Eq + Hash {
     /// local.apply(op);
     /// assert!(local.contains(&13));
     /// ```
-    fn apply(&mut self, operation: GSetInsert<T>) {
-        self.insert(operation.element);
+    fn apply(&mut self, op: GSetOp<T>) {
+        self.insert(op.element);
     }
 }
 
@@ -175,12 +177,12 @@ impl <T> Arbitrary for GSet<T> where T: Arbitrary + Clone + Eq + Hash {
 }
 
 #[cfg(any(quickcheck, test))]
-impl <T> Arbitrary for GSetInsert<T> where T: Arbitrary {
-    fn arbitrary<G: Gen>(g: &mut G) -> GSetInsert<T> {
-        GSetInsert { element: Arbitrary::arbitrary(g) }
+impl <T> Arbitrary for GSetOp<T> where T: Arbitrary {
+    fn arbitrary<G: Gen>(g: &mut G) -> GSetOp<T> {
+        GSetOp { element: Arbitrary::arbitrary(g) }
     }
-    fn shrink(&self) -> Box<Iterator<Item=GSetInsert<T>> + 'static> {
-        Box::new(self.element.shrink().map(|e| GSetInsert { element: e }))
+    fn shrink(&self) -> Box<Iterator<Item=GSetOp<T>> + 'static> {
+        Box::new(self.element.shrink().map(|e| GSetOp { element: e }))
     }
 }
 
@@ -190,10 +192,10 @@ mod test {
     use quickcheck::quickcheck;
 
     use {Crdt, test};
-    use super::{GSet, GSetInsert};
+    use super::{GSet, GSetOp};
 
     type C = GSet<u32>;
-    type O = GSetInsert<u32>;
+    type O = GSetOp<u32>;
 
     #[test]
     fn check_apply_is_commutative() {

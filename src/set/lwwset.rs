@@ -170,6 +170,8 @@ impl <T> Crdt for LwwSet<T> where T: Clone + Eq + Hash {
     ///
     /// This method is used to perform operation-based replication.
     ///
+    /// Applying an operation to a `LwwSet` is idempotent.
+    ///
     /// ##### Example
     ///
     /// ```
@@ -183,8 +185,8 @@ impl <T> Crdt for LwwSet<T> where T: Clone + Eq + Hash {
     /// local.apply(op);
     /// assert!(local.contains(&13));
     /// ```
-    fn apply(&mut self, operation: LwwSetOp<T>) {
-        match operation {
+    fn apply(&mut self, op: LwwSetOp<T>) {
+        match op {
             LwwSetOp::Insert(element, tid) => { self.insert(element, tid); },
             LwwSetOp::Remove(element, tid) => { self.remove(element, tid); }
         }

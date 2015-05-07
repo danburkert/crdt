@@ -48,7 +48,7 @@
 //! `OrSet` should be used in most cases where typical set semantics are
 //! needed.
 
-pub use self::gset::{GSet, GSetInsert};
+pub use self::gset::{GSet, GSetOp};
 pub use self::tpset::{TpSet, TpSetOp};
 pub use self::lwwset::{LwwSet, LwwSetOp};
 pub use self::pnset::{PnSet, PnSetOp};
